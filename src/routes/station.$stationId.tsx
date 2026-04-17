@@ -41,7 +41,8 @@ export const Route = createFileRoute("/station/$stationId")({
 });
 
 function StationPage() {
-  const { station, rooms } = Route.useLoaderData();
+  const data = Route.useLoaderData() as { station: Station; rooms: Room[] };
+  const { station, rooms } = data;
 
   return (
     <div className="min-h-screen">
