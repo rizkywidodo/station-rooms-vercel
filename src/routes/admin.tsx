@@ -4,12 +4,10 @@ import { Calendar, Check, Clock, LogOut, Mail, Search, Users, X } from "lucide-r
 import { SiteHeader } from "@/components/site-header";
 import {
   STATUS_LABEL,
-  bookingsStore,
-  getRoom,
-  getStation,
   type Booking,
   type BookingStatus,
 } from "@/lib/dummy-data";
+import { getBookings, getRooms, getStations, updateBookingStatus } from "@/lib/db";
 import { isAdminLoggedIn, setAdminLoggedIn } from "./admin.login";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +19,10 @@ export const Route = createFileRoute("/admin")({
 function AdminPage() {
   const navigate = useNavigate();
   const [authed, setAuthed] = useState(false);
-  const [tick, setTick] = useState(0); // re-render after mutation
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [roomMap, setRoomMap] = useState<Record<string, { name: string; stationId: string }>>({});
+  const [stationMap, setStationMap] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<BookingStatus | "all">("pending");
 
@@ -33,51 +34,59 @@ function AdminPage() {
     }
   }, [navigate]);
 
-  const all = bookingsStore.list();
+  const fetchAll = async () => {
+    const [b, rooms, stations] = await Promise.all([getBookings(), getRooms(), getStations()]);
+    setBookings(b);
+    setRoomMap(Object.fromEntries(rooms.map((r) => [r.id, { name: r.name, stationId: r.stationId }])));
+    setStationMap(Object.fromEntries(stations.map((s) => [s.id, s.name])));
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (authed) fetchAll();
+  }, [authed]);
+
   const filtered = useMemo(() => {
-    return all
+    return bookings
       .filter((b) => (status === "all" ? true : b.status === status))
       .filter((b) => {
         if (!search.trim()) return true;
         const q = search.toLowerCase();
-        const room = getRoom(b.roomId);
-        const station = room ? getStation(room.stationId) : undefined;
+        const room = roomMap[b.roomId];
+        const stationName = room ? stationMap[room.stationId] : "";
         return (
           b.requesterName.toLowerCase().includes(q) ||
           b.origin.toLowerCase().includes(q) ||
           String(b.id).includes(q) ||
-          (station?.name.toLowerCase().includes(q) ?? false) ||
+          (stationName?.toLowerCase().includes(q) ?? false) ||
           (room?.name.toLowerCase().includes(q) ?? false)
         );
       })
       .sort((a, b) => (a.date < b.date ? -1 : 1));
-  }, [all, status, search, tick]);
+  }, [bookings, status, search, roomMap, stationMap]);
 
-  const counts = useMemo(() => {
-    return {
-      pending: all.filter((b) => b.status === "pending").length,
-      confirmed: all.filter((b) => b.status === "confirmed").length,
-      rejected: all.filter((b) => b.status === "rejected").length,
-    };
-  }, [all, tick]);
+  const counts = useMemo(() => ({
+    pending: bookings.filter((b) => b.status === "pending").length,
+    confirmed: bookings.filter((b) => b.status === "confirmed").length,
+    rejected: bookings.filter((b) => b.status === "rejected").length,
+  }), [bookings]);
 
   if (!authed) return null;
 
-  const decide = (b: Booking, decision: BookingStatus) => {
-    bookingsStore.updateStatus(b.id, decision);
-    // Konflik: ketika confirmed, auto-reject pending lain di slot yang sama
+  const decide = async (b: Booking, decision: BookingStatus) => {
+    await updateBookingStatus(b.id, decision);
+    // Auto-reject booking lain yang konflik
     if (decision === "confirmed") {
-      const list = bookingsStore.list();
-      list.forEach((other) => {
-        if (other.id === b.id) return;
-        if (other.status !== "pending") return;
-        if (other.roomId !== b.roomId) return;
-        if (other.date !== b.date) return;
-        const overlap = !(other.endTime <= b.startTime || other.startTime >= b.endTime);
-        if (overlap) bookingsStore.updateStatus(other.id, "rejected");
+      const conflicts = bookings.filter((other) => {
+        if (other.id === b.id) return false;
+        if (other.status !== "pending") return false;
+        if (other.roomId !== b.roomId) return false;
+        if (other.date !== b.date) return false;
+        return !(other.endTime <= b.startTime || other.startTime >= b.endTime);
       });
+      await Promise.all(conflicts.map((c) => updateBookingStatus(c.id, "rejected")));
     }
-    setTick((t) => t + 1);
+    await fetchAll();
   };
 
   const logout = () => {
@@ -93,9 +102,7 @@ function AdminPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Admin Dashboard</h1>
-            <p className="text-sm text-muted-foreground">
-              Kelola pengajuan booking & approval.
-            </p>
+            <p className="text-sm text-muted-foreground">Kelola pengajuan booking & approval.</p>
           </div>
           <button
             onClick={logout}
@@ -140,12 +147,22 @@ function AdminPage() {
           </div>
 
           <div className="mt-5 space-y-3">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div className="py-10 text-center text-sm text-muted-foreground">Memuat...</div>
+            ) : filtered.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
                 Tidak ada pengajuan.
               </div>
             ) : (
-              filtered.map((b) => <AdminBookingRow key={b.id} booking={b} onDecide={decide} />)
+              filtered.map((b) => (
+                <AdminBookingRow
+                  key={b.id}
+                  booking={b}
+                  roomName={roomMap[b.roomId]?.name ?? b.roomId}
+                  stationName={stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""}
+                  onDecide={decide}
+                />
+              ))
             )}
           </div>
         </div>
@@ -154,21 +171,11 @@ function AdminPage() {
   );
 }
 
-function StatCard({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: "warning" | "primary" | "destructive";
-}) {
+function StatCard({ label, value, tone }: { label: string; value: number; tone: "warning" | "primary" | "destructive" }) {
   const toneCls =
-    tone === "warning"
-      ? "text-warning border-warning/30 bg-warning/5"
-      : tone === "primary"
-      ? "text-primary border-primary/30 bg-primary/5"
-      : "text-destructive border-destructive/30 bg-destructive/5";
+    tone === "warning" ? "text-warning border-warning/30 bg-warning/5"
+    : tone === "primary" ? "text-primary border-primary/30 bg-primary/5"
+    : "text-destructive border-destructive/30 bg-destructive/5";
   return (
     <div className={cn("rounded-2xl border p-5", toneCls)}>
       <div className="text-xs font-medium uppercase tracking-wider opacity-80">{label}</div>
@@ -185,58 +192,43 @@ const statusBadge: Record<BookingStatus, string> = {
 
 function AdminBookingRow({
   booking,
+  roomName,
+  stationName,
   onDecide,
 }: {
   booking: Booking;
+  roomName: string;
+  stationName: string;
   onDecide: (b: Booking, s: BookingStatus) => void;
 }) {
-  const room = getRoom(booking.roomId);
-  const station = room ? getStation(room.stationId) : undefined;
   return (
     <div className="rounded-2xl border border-border bg-card-elevated p-4 sm:p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span
-              className={cn(
-                "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
-                statusBadge[booking.status],
-              )}
-            >
+            <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold", statusBadge[booking.status])}>
               {STATUS_LABEL[booking.status]}
             </span>
             <span className="text-xs text-muted-foreground">#{booking.id}</span>
             <span className="text-xs text-muted-foreground">·</span>
             <span className="text-xs text-muted-foreground">{booking.origin}</span>
           </div>
-
           <h3 className="mt-2 text-base font-semibold">
-            {station?.name} · <span className="text-muted-foreground">{room?.name}</span>
+            {stationName} · <span className="text-muted-foreground">{roomName}</span>
           </h3>
           <p className="text-sm">{booking.requesterName}</p>
-
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <Calendar className="h-3.5 w-3.5" /> {booking.date}
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5" /> {booking.startTime}–{booking.endTime}
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <Users className="h-3.5 w-3.5" /> {booking.attendees}
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <Mail className="h-3.5 w-3.5" /> {booking.email}
-            </span>
+            <span className="inline-flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> {booking.date}</span>
+            <span className="inline-flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> {booking.startTime}–{booking.endTime}</span>
+            <span className="inline-flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> {booking.attendees}</span>
+            <span className="inline-flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> {booking.email}</span>
           </div>
-
           {booking.notes && (
             <p className="mt-3 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
               <strong className="text-foreground/80">Catatan:</strong> {booking.notes}
             </p>
           )}
         </div>
-
         {booking.status === "pending" && (
           <div className="flex shrink-0 gap-2 sm:flex-col">
             <button

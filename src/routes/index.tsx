@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { ArrowRight, MapPin, Search, Plus } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { BookingCalendar } from "@/components/booking-calendar";
@@ -8,12 +8,12 @@ import {
   REGION_LABEL,
   ROOM_TYPE_LABEL,
   STATIONS,
-  bookingsStore,
-  getRoomsByStation,
-  getStationsByRegion,
-  stationHasRooms,
   type BookingStatus,
+  type Booking,
+  type Station,
+  type Room,
 } from "@/lib/dummy-data";
+import { getBookings, getRooms } from "@/lib/db";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -25,11 +25,6 @@ export const Route = createFileRoute("/")({
         content:
           "Sistem reservasi real-time untuk meeting room, collaboration room, dan station office di stasiun MRT Jakarta.",
       },
-      { property: "og:title", content: "Booking Ruang Stasiun · MRT Jakarta" },
-      {
-        property: "og:description",
-        content: "Reservasi ruangan back-of-house stasiun MRT Jakarta secara real-time.",
-      },
     ],
   }),
   component: IndexPage,
@@ -39,8 +34,24 @@ function IndexPage() {
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const bookings = bookingsStore.list();
+  useEffect(() => {
+    Promise.all([getBookings(), getRooms()]).then(([b, r]) => {
+      setBookings(b);
+      setRooms(r);
+      setLoading(false);
+    });
+  }, []);
+
+  const stationHasRooms = (stationId: string) => rooms.some((r) => r.stationId === stationId);
+  const getRoomsByStation = (stationId: string) => rooms.filter((r) => r.stationId === stationId);
+
+  const getStationsByRegion = (region: 1 | 2 | 3): Station[] =>
+    STATIONS.filter((s) => s.region === region);
+
   const filtered = useMemo(() => {
     return bookings
       .filter((b) => (statusFilter === "all" ? true : b.status === statusFilter))
@@ -60,8 +71,7 @@ function IndexPage() {
     <div className="min-h-screen">
       <SiteHeader />
 
-      {/* Hero */}
-      <section className="mx-auto max-w-6xl px-4 pt-8 sm:px-6 sm:pt-12">
+      <section className="mx-auto max-w-6xl px-4 pt-8 sm:px-6">
         <div className="rounded-3xl border border-border bg-card/60 p-6 sm:p-10">
           <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
             <div className="max-w-2xl">
@@ -87,7 +97,6 @@ function IndexPage() {
         </div>
       </section>
 
-      {/* Calendar + region overview */}
       <section className="mx-auto mt-6 grid max-w-6xl gap-6 px-4 sm:px-6 lg:grid-cols-[1.1fr_1fr]">
         <BookingCalendar selectedDate={selectedDate} onSelectDate={setSelectedDate} />
 
@@ -131,7 +140,6 @@ function IndexPage() {
         </div>
       </section>
 
-      {/* Bookings list */}
       <section className="mx-auto mt-6 max-w-6xl px-4 pb-16 sm:px-6">
         <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -162,17 +170,16 @@ function IndexPage() {
           {selectedDate && (
             <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
               Filter tanggal: <strong className="text-foreground">{selectedDate}</strong>
-              <button
-                onClick={() => setSelectedDate(undefined)}
-                className="text-primary hover:underline"
-              >
+              <button onClick={() => setSelectedDate(undefined)} className="text-primary hover:underline">
                 hapus
               </button>
             </div>
           )}
 
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div className="col-span-full py-10 text-center text-sm text-muted-foreground">Memuat...</div>
+            ) : filtered.length === 0 ? (
               <div className={cn("col-span-full rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground")}>
                 Belum ada booking yang cocok.
               </div>
@@ -183,20 +190,13 @@ function IndexPage() {
         </div>
       </section>
 
-      <Footer />
+      <footer className="border-t border-border/60 py-6 text-center text-xs text-muted-foreground">
+        © {new Date().getFullYear()} MRT Jakarta · Internal tool ·{" "}
+        <span className="text-foreground/70">
+          {Object.values(ROOM_TYPE_LABEL).join(" · ")}
+        </span>{" "}
+        · {STATIONS.length} stasiun
+      </footer>
     </div>
-  );
-}
-
-function Footer() {
-  // tiny helper to surface room types (uses ROOM_TYPE_LABEL so import is used elsewhere too)
-  return (
-    <footer className="border-t border-border/60 py-6 text-center text-xs text-muted-foreground">
-      © {new Date().getFullYear()} MRT Jakarta · Internal tool ·{" "}
-      <span className="text-foreground/70">
-        {Object.values(ROOM_TYPE_LABEL).join(" · ")}
-      </span>{" "}
-      · {STATIONS.length} stasiun
-    </footer>
   );
 }
