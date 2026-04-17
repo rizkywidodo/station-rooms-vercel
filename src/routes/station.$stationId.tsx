@@ -2,10 +2,16 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight, MapPin, Users } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { BookingCalendar } from "@/components/booking-calendar";
-import { ROOM_TYPE_LABEL, getRoomsByStation, getStation } from "@/lib/dummy-data";
+import {
+  ROOM_TYPE_LABEL,
+  getRoomsByStation,
+  getStation,
+  type Room,
+  type Station,
+} from "@/lib/dummy-data";
 
 export const Route = createFileRoute("/station/$stationId")({
-  loader: ({ params }) => {
+  loader: ({ params }): { station: Station; rooms: Room[] } => {
     const station = getStation(params.stationId);
     if (!station) throw notFound();
     const rooms = getRoomsByStation(station.id);

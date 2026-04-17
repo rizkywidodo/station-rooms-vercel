@@ -9,6 +9,8 @@ import {
   bookingsStore,
   getRoom,
   getStation,
+  type Room,
+  type Station,
 } from "@/lib/dummy-data";
 
 const bookingSchema = z.object({
@@ -24,7 +26,7 @@ const bookingSchema = z.object({
 });
 
 export const Route = createFileRoute("/book/$roomId")({
-  loader: ({ params }) => {
+  loader: ({ params }): { room: Room; station: Station } => {
     const room = getRoom(params.roomId);
     if (!room) throw notFound();
     const station = getStation(room.stationId);
