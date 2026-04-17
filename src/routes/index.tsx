@@ -100,7 +100,7 @@ function IndexPage() {
           </div>
           <div className="space-y-5">
             {([1, 2, 3] as const).map((region) => {
-              const stations = getStationsByRegion(region).filter(stationHasRooms);
+              const stations = getStationsByRegion(region).filter((s) => stationHasRooms(s.id));
               if (stations.length === 0) return null;
               return (
                 <div key={region}>
