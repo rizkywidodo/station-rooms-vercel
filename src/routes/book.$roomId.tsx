@@ -59,7 +59,8 @@ export const Route = createFileRoute("/book/$roomId")({
 });
 
 function BookRoomPage() {
-  const { room, station } = Route.useLoaderData();
+  const data = Route.useLoaderData() as { room: Room; station: Station };
+  const { room, station } = data;
   const navigate = useNavigate();
   const [date, setDate] = useState<string | undefined>();
   const [originType, setOriginType] = useState<"mrt" | "mitra">("mrt");
