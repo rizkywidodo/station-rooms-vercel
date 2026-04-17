@@ -2,45 +2,51 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { ShieldCheck } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
+import { supabase } from "@/lib/supabase";
 
-const ADMIN_KEY = "mrtj-admin-session";
-const DEMO_USER = "admin";
-const DEMO_PASS = "mrtj2026";
-
-export function isAdminLoggedIn() {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(ADMIN_KEY) === "1";
-}
-
-export function setAdminLoggedIn(v: boolean) {
-  if (typeof window === "undefined") return;
-  if (v) window.localStorage.setItem(ADMIN_KEY, "1");
-  else window.localStorage.removeItem(ADMIN_KEY);
-}
 
 export const Route = createFileRoute("/admin/login")({
   head: () => ({ meta: [{ title: "Admin · Login · MRT Jakarta" }] }),
+  ssr: false,
   component: AdminLoginPage,
 });
 
 function AdminLoginPage() {
   const navigate = useNavigate();
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+const [checking, setChecking] = useState(true);
 
-  useEffect(() => {
-    if (isAdminLoggedIn()) navigate({ to: "/admin" });
-  }, [navigate]);
-
-  const onSubmit = (e: FormEvent) => {
-    e.preventDefault();
-    if (username.trim() === DEMO_USER && password === DEMO_PASS) {
-      setAdminLoggedIn(true);
+useEffect(() => {
+  if (typeof window === "undefined") return;
+  supabase.auth.getSession().then(({ data }) => {
+    if (data.session) {
       navigate({ to: "/admin" });
     } else {
-      setError("Username atau password salah");
+      setChecking(false);
     }
+  });
+}, [navigate]);
+
+if (typeof window === "undefined") return null;
+if (checking) return <div style={{padding: "2rem"}}>Checking...</div>;
+
+  const onSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (error) {
+      setError("Email atau password salah");
+    } else {
+      navigate({ to: "/admin" });
+    }
+    setLoading(false);
   };
 
   return (
@@ -55,17 +61,16 @@ function AdminLoginPage() {
           Akses terbatas untuk tim pengelola.
         </p>
 
-        <form
-          onSubmit={onSubmit}
-          className="mt-8 w-full rounded-2xl border border-border bg-card p-6"
-        >
+        <form onSubmit={onSubmit} className="mt-8 w-full rounded-2xl border border-border bg-card p-6">
           <label className="block">
-            <span className="mb-1.5 block text-xs font-medium text-muted-foreground">Username</span>
+            <span className="mb-1.5 block text-xs font-medium text-muted-foreground">Email</span>
             <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-xl border border-border bg-muted/60 px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
-              autoComplete="username"
+              autoComplete="email"
+              placeholder="admin@mrtjakarta.co.id"
             />
           </label>
           <label className="mt-4 block">
@@ -82,22 +87,15 @@ function AdminLoginPage() {
 
           <button
             type="submit"
-            className="mt-5 w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110"
+            disabled={loading}
+            className="mt-5 w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110 disabled:opacity-60"
           >
-            Masuk
+            {loading ? "Masuk..." : "Masuk"}
           </button>
-
-          <p className="mt-4 rounded-lg border border-dashed border-border bg-muted/30 p-3 text-[11px] text-muted-foreground">
-            <strong>Demo:</strong> <code>admin</code> / <code>mrtj2026</code>
-            <br />
-            <span className="text-foreground/60">
-              (Mockup tanpa backend — auth asli akan disambungkan ke Lovable Cloud nanti.)
-            </span>
-          </p>
 
           <Link
             to="/"
-            className="mt-3 block text-center text-xs text-muted-foreground hover:text-foreground"
+            className="mt-4 block text-center text-xs text-muted-foreground hover:text-foreground"
           >
             ← Kembali ke beranda
           </Link>

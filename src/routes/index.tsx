@@ -1,8 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
-import { ArrowRight, MapPin, Search, Plus } from "lucide-react";
+import { ArrowRight, MapPin, Search, Clock, Users, Calendar } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
-import { BookingCalendar } from "@/components/booking-calendar";
 import { BookingCard } from "@/components/booking-card";
 import {
   REGION_LABEL,
@@ -10,8 +9,8 @@ import {
   STATIONS,
   type BookingStatus,
   type Booking,
-  type Station,
   type Room,
+  type Station,
 } from "@/lib/dummy-data";
 import { getBookings, getRooms } from "@/lib/db";
 import { cn } from "@/lib/utils";
@@ -20,22 +19,18 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Booking Ruang Stasiun · MRT Jakarta" },
-      {
-        name: "description",
-        content:
-          "Sistem reservasi real-time untuk meeting room, collaboration room, dan station office di stasiun MRT Jakarta.",
-      },
+      { name: "description", content: "Sistem reservasi ruangan back-of-house stasiun MRT Jakarta." },
     ],
   }),
   component: IndexPage,
 });
 
 function IndexPage() {
-  const [selectedDate, setSelectedDate] = useState<string | undefined>();
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<BookingStatus | "all">("all");
+  const [selectedDate, setSelectedDate] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -48,7 +43,6 @@ function IndexPage() {
 
   const stationHasRooms = (stationId: string) => rooms.some((r) => r.stationId === stationId);
   const getRoomsByStation = (stationId: string) => rooms.filter((r) => r.stationId === stationId);
-
   const getStationsByRegion = (region: 1 | 2 | 3): Station[] =>
     STATIONS.filter((s) => s.region === region);
 
@@ -68,135 +62,161 @@ function IndexPage() {
   }, [bookings, search, statusFilter, selectedDate]);
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-background">
       <SiteHeader />
 
-      <section className="mx-auto max-w-6xl px-4 pt-8 sm:px-6">
-        <div className="rounded-3xl border border-border bg-card/60 p-6 sm:p-10">
-          <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-            <div className="max-w-2xl">
-              <span className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" /> Sistem Reservasi Real-time
-              </span>
-              <h1 className="mt-4 text-3xl font-bold tracking-tight sm:text-4xl">
-                Booking ruang stasiun{" "}
-                <span className="text-gradient-primary">MRT Jakarta</span>
-              </h1>
-              <p className="mt-3 text-sm text-muted-foreground sm:text-base">
-                Pilih stasiun, lihat ketersediaan, dan ajukan booking dalam beberapa langkah. Tim
-                pengelola akan mengonfirmasi via email.
-              </p>
-            </div>
-            <Link
-              to="/stations"
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[0_8px_30px_-10px_oklch(0.78_0.16_165/0.5)] transition hover:brightness-110"
-            >
-              <Plus className="h-4 w-4" /> Booking Baru
-            </Link>
+      {/* Hero */}
+      <section className="mx-auto max-w-6xl px-4 pt-14 pb-10 sm:px-6">
+        <div className="max-w-2xl">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-success/20 bg-success/5 px-3 py-1 text-xs font-semibold text-success">
+            <span className="h-1.5 w-1.5 rounded-full bg-success" />
+            Internal Tool · MRT Jakarta
           </div>
+          <h1 className="text-4xl font-black tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+            Booking<br />
+            <span className="text-gradient-primary">Ruang Stasiun.</span>
+          </h1>
+          <p className="mt-4 text-base text-muted-foreground sm:text-lg max-w-lg">
+            Reservasi ruangan back-of-house di 13 stasiun MRT Jakarta. Pilih stasiun, cek ketersediaan, ajukan dalam hitungan detik.
+          </p>
+          <Link
+            to="/stations"
+            className="mt-8 inline-flex items-center gap-2 rounded-xl bg-foreground px-6 py-3 text-sm font-medium text-background transition hover:opacity-70"
+          >
+            Booking Sekarang <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
       </section>
 
-      <section className="mx-auto mt-6 grid max-w-6xl gap-6 px-4 sm:px-6 lg:grid-cols-[1.1fr_1fr]">
-        <BookingCalendar selectedDate={selectedDate} onSelectDate={setSelectedDate} />
+      {/* Divider */}
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="h-px bg-border" />
+      </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Pilih Stasiun</h3>
-            <Link to="/stations" className="text-xs font-medium text-primary hover:underline">
-              Lihat semua →
-            </Link>
+      {/* Stations */}
+      <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
+        <div className="mb-8 flex items-end justify-between">
+          <div>
+            <h2 className="text-2xl font-black tracking-tight">Stasiun</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Pilih stasiun untuk lihat ruangan yang tersedia</p>
           </div>
-          <div className="space-y-5">
-            {([1, 2, 3] as const).map((region) => {
-              const stations = getStationsByRegion(region).filter((s) => stationHasRooms(s.id));
-              if (stations.length === 0) return null;
-              return (
-                <div key={region}>
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    {REGION_LABEL[region]}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {stations.map((s) => (
-                      <Link
+          <Link to="/stations" className="text-xs font-semibold text-primary hover:underline">
+            Lihat semua →
+          </Link>
+        </div>
+
+        <div className="space-y-8">
+          {([1, 2, 3] as const).map((region) => {
+            const stations = getStationsByRegion(region);
+            return (
+              <div key={region}>
+                <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                  {REGION_LABEL[region]}
+                </p>
+                <div className="flex flex-col">
+                  {stations.map((s) => {
+                    const hasRooms = stationHasRooms(s.id);
+                    const roomCount = getRoomsByStation(s.id).length;
+                    return (
+                      <StationCard
                         key={s.id}
-                        to="/station/$stationId"
-                        params={{ stationId: s.id }}
-                        className="group inline-flex items-center gap-2 rounded-xl border border-border bg-muted/40 px-3 py-2 text-sm transition hover:border-primary/50 hover:bg-muted"
-                      >
-                        <MapPin className="h-3.5 w-3.5 text-primary" />
-                        <span className="font-medium">{s.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          · {getRoomsByStation(s.id).length} ruang
-                        </span>
-                        <ArrowRight className="h-3.5 w-3.5 -translate-x-1 opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100" />
-                      </Link>
-                    ))}
-                  </div>
+                        station={s}
+                        roomCount={roomCount}
+                        hasRooms={hasRooms}
+                      />
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })}
         </div>
       </section>
 
-      <section className="mx-auto mt-6 max-w-6xl px-4 pb-16 sm:px-6">
-        <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h3 className="text-lg font-semibold">Daftar Booking</h3>
-            <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:justify-end">
-              <div className="relative sm:max-w-xs sm:flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Cari booking..."
-                  className="w-full rounded-xl border border-border bg-muted/60 py-2 pl-9 pr-3 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-                />
-              </div>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as BookingStatus | "all")}
-                className="rounded-xl border border-border bg-muted/60 px-3 py-2 text-sm focus:border-primary focus:outline-none"
-              >
-                <option value="all">Semua Status</option>
-                <option value="pending">Menunggu</option>
-                <option value="confirmed">Terkonfirmasi</option>
-                <option value="rejected">Ditolak</option>
-              </select>
-            </div>
-          </div>
+      {/* Divider */}
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className="h-px bg-border" />
+      </div>
 
-          {selectedDate && (
-            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-              Filter tanggal: <strong className="text-foreground">{selectedDate}</strong>
-              <button onClick={() => setSelectedDate(undefined)} className="text-primary hover:underline">
-                hapus
-              </button>
+      {/* Bookings */}
+      <section className="mx-auto max-w-6xl px-4 py-12 pb-20 sm:px-6">
+        <div className="mb-8 flex items-end justify-between">
+          <div>
+            <h2 className="text-2xl font-black tracking-tight">Daftar Booking</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Semua pengajuan yang masuk</p>
+          </div>
+        </div>
+
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row">
+          <div className="relative flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Cari nama, divisi, ID..."
+              className="w-full rounded-xl border border-border bg-white py-2.5 pl-9 pr-3 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/10"
+            />
+          </div>
+          <input
+            type="date"
+            value={selectedDate ?? ""}
+            onChange={(e) => setSelectedDate(e.target.value || undefined)}
+            className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as BookingStatus | "all")}
+            className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+          >
+            <option value="all">Semua Status</option>
+            <option value="pending">Menunggu</option>
+            <option value="confirmed">Terkonfirmasi</option>
+            <option value="rejected">Ditolak</option>
+          </select>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {loading ? (
+            <div className="col-span-full py-16 text-center text-sm text-muted-foreground">Memuat...</div>
+          ) : filtered.length === 0 ? (
+            <div className="col-span-full rounded-2xl border border-dashed border-border py-16 text-center text-sm text-muted-foreground">
+              Belum ada booking.
             </div>
+          ) : (
+            filtered.map((b) => <BookingCard key={b.id} booking={b} />)
           )}
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {loading ? (
-              <div className="col-span-full py-10 text-center text-sm text-muted-foreground">Memuat...</div>
-            ) : filtered.length === 0 ? (
-              <div className={cn("col-span-full rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground")}>
-                Belum ada booking yang cocok.
-              </div>
-            ) : (
-              filtered.map((b) => <BookingCard key={b.id} booking={b} />)
-            )}
-          </div>
         </div>
       </section>
 
-      <footer className="border-t border-border/60 py-6 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} MRT Jakarta · Internal tool ·{" "}
-        <span className="text-foreground/70">
-          {Object.values(ROOM_TYPE_LABEL).join(" · ")}
-        </span>{" "}
-        · {STATIONS.length} stasiun
+      <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
+        © {new Date().getFullYear()} MRT Jakarta · Internal Tool · {STATIONS.length} stasiun ·{" "}
+        {Object.values(ROOM_TYPE_LABEL).join(" · ")}
       </footer>
     </div>
+  );
+}
+
+function StationCard({ station, roomCount, hasRooms }: { station: Station; roomCount: number; hasRooms: boolean }) {
+  if (!hasRooms) {
+    return (
+      <div className="flex items-center justify-between py-3 border-b border-border">
+        <span className="text-muted-foreground">{station.name}</span>
+        <span className="text-xs text-muted-foreground/50">Tidak tersedia</span>
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to="/station/$stationId"
+      params={{ stationId: station.id }}
+      className="group flex items-center justify-between py-3 border-b border-border transition hover:opacity-60"
+    >
+      <span className="text-base font-medium">{station.name}</span>
+      <div className="flex items-center gap-3">
+        <span className="text-xs text-success font-medium">{roomCount} ruangan</span>
+        <ArrowRight className="h-3.5 w-3.5 text-success transition group-hover:translate-x-1" />
+      </div>
+    </Link>
   );
 }

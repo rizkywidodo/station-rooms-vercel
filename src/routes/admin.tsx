@@ -8,7 +8,7 @@ import {
   type BookingStatus,
 } from "@/lib/dummy-data";
 import { getBookings, getRooms, getStations, updateBookingStatus } from "@/lib/db";
-import { isAdminLoggedIn, setAdminLoggedIn } from "./admin.login";
+import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin")({
@@ -27,12 +27,14 @@ function AdminPage() {
   const [status, setStatus] = useState<BookingStatus | "all">("pending");
 
   useEffect(() => {
-    if (!isAdminLoggedIn()) {
+  supabase.auth.getSession().then(({ data }) => {
+    if (!data.session) {
       navigate({ to: "/admin/login" });
     } else {
       setAuthed(true);
     }
-  }, [navigate]);
+  });
+}, [navigate]);
 
   const fetchAll = async () => {
     const [b, rooms, stations] = await Promise.all([getBookings(), getRooms(), getStations()]);
@@ -89,11 +91,10 @@ function AdminPage() {
     await fetchAll();
   };
 
-  const logout = () => {
-    setAdminLoggedIn(false);
-    navigate({ to: "/" });
-  };
-
+  const logout = async () => {
+  await supabase.auth.signOut();
+  navigate({ to: "/" });
+};
   return (
     <div className="min-h-screen">
       <SiteHeader />
