@@ -367,6 +367,20 @@ function StationsTab({ stations, rooms, onRefresh }: { stations: Station[]; room
     setSaving(false);
   };
 
+  const handleDelete = async (id: string, name: string) => {
+    const roomCount = rooms.filter((r) => r.stationId === id).length;
+    if (roomCount > 0) {
+      alert(`Tidak bisa hapus ${name} — masih ada ${roomCount} ruangan. Hapus ruangannya dulu!`);
+      return;
+    }
+    if (!confirm(`Hapus stasiun ${name}?`)) return;
+    try {
+      const { error } = await supabase.from("stations").delete().eq("id", id);
+      if (error) throw error;
+      onRefresh();
+    } catch { alert("Gagal menghapus stasiun"); }
+  };
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
@@ -408,7 +422,15 @@ function StationsTab({ stations, rooms, onRefresh }: { stations: Station[]; room
                 <span className="font-medium">{s.name}</span>
                 <span className="ml-3 text-xs text-muted-foreground">Region {s.region} · {roomCount} ruangan</span>
               </div>
-              <span className="text-[11px] font-mono text-muted-foreground/50">{s.id}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-mono text-muted-foreground/50">{s.id}</span>
+                <button
+                  onClick={() => handleDelete(s.id, s.name)}
+                  className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-destructive/40 hover:text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" /> Hapus
+                </button>
+              </div>
             </div>
           );
         })}
