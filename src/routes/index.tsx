@@ -235,9 +235,8 @@ function IndexPage() {
       </section>
 
       <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} MRT Jakarta · Internal Tool · {STATIONS.length} stasiun ·{" "}
-        {Object.values(ROOM_TYPE_LABEL).join(" · ")}
-      </footer>
+  © {new Date().getFullYear()} MRT Jakarta · Internal Tool · Abizar · Rizky · Sabrina
+    </footer>
     </div>
   );
 }
