@@ -29,14 +29,12 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
+      { title: "Booking Ruang Stasiun · MRT Jakarta" },
+      { name: "description", content: "Sistem reservasi ruangan back-of-house stasiun MRT Jakarta." },
+      { name: "author", content: "MRT Jakarta" },
+      { property: "og:title", content: "Booking Ruang Stasiun · MRT Jakarta" },
+      { property: "og:description", content: "Sistem reservasi ruangan back-of-house stasiun MRT Jakarta." },
+      { name: "twitter:site", content: "@mrtjakarta" },
     ],
     links: [
   {
