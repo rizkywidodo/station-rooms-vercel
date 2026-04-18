@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin Dashboard · MRT Jakarta Booking" }] }),
+  ssr: false,
   component: AdminPage,
 });
 
@@ -27,14 +28,14 @@ function AdminPage() {
   const [status, setStatus] = useState<BookingStatus | "all">("pending");
 
   useEffect(() => {
-  supabase.auth.getSession().then(({ data }) => {
-    if (!data.session) {
-      navigate({ to: "/admin/login" });
-    } else {
-      setAuthed(true);
-    }
-  });
-}, [navigate]);
+    supabase.auth.getSession().then(({ data }) => {
+      if (!data.session) {
+        navigate({ to: "/admin-login" });
+      } else {
+        setAuthed(true);
+      }
+    });
+  }, [navigate]);
 
   const fetchAll = async () => {
     const [b, rooms, stations] = await Promise.all([getBookings(), getRooms(), getStations()]);
@@ -77,7 +78,6 @@ function AdminPage() {
 
   const decide = async (b: Booking, decision: BookingStatus) => {
     await updateBookingStatus(b.id, decision);
-    // Auto-reject booking lain yang konflik
     if (decision === "confirmed") {
       const conflicts = bookings.filter((other) => {
         if (other.id === b.id) return false;
@@ -92,13 +92,13 @@ function AdminPage() {
   };
 
   const logout = async () => {
-  await supabase.auth.signOut();
-  navigate({ to: "/" });
-};
+    await supabase.auth.signOut();
+    navigate({ to: "/" });
+  };
+
   return (
     <div className="min-h-screen">
       <SiteHeader />
-
       <section className="mx-auto max-w-6xl px-4 pt-8 sm:px-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -112,14 +112,12 @@ function AdminPage() {
             <LogOut className="h-3.5 w-3.5" /> Logout
           </button>
         </div>
-
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <StatCard label="Menunggu" value={counts.pending} tone="warning" />
           <StatCard label="Terkonfirmasi" value={counts.confirmed} tone="primary" />
           <StatCard label="Ditolak" value={counts.rejected} tone="destructive" />
         </div>
       </section>
-
       <section className="mx-auto mt-6 max-w-6xl px-4 pb-16 sm:px-6">
         <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -146,7 +144,6 @@ function AdminPage() {
               </select>
             </div>
           </div>
-
           <div className="mt-5 space-y-3">
             {loading ? (
               <div className="py-10 text-center text-sm text-muted-foreground">Memuat...</div>

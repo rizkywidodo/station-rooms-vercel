@@ -1,11 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { ShieldCheck } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { supabase } from "@/lib/supabase";
 
-
-export const Route = createFileRoute("/admin/login")({
+export const Route = createFileRoute("/admin-login")({
   head: () => ({ meta: [{ title: "Admin · Login · MRT Jakarta" }] }),
   ssr: false,
   component: AdminLoginPage,
@@ -17,21 +16,6 @@ function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-const [checking, setChecking] = useState(true);
-
-useEffect(() => {
-  if (typeof window === "undefined") return;
-  supabase.auth.getSession().then(({ data }) => {
-    if (data.session) {
-      navigate({ to: "/admin" });
-    } else {
-      setChecking(false);
-    }
-  });
-}, [navigate]);
-
-if (typeof window === "undefined") return null;
-if (checking) return <div style={{padding: "2rem"}}>Checking...</div>;
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -60,7 +44,6 @@ if (checking) return <div style={{padding: "2rem"}}>Checking...</div>;
         <p className="mt-1 text-sm text-muted-foreground">
           Akses terbatas untuk tim pengelola.
         </p>
-
         <form onSubmit={onSubmit} className="mt-8 w-full rounded-2xl border border-border bg-card p-6">
           <label className="block">
             <span className="mb-1.5 block text-xs font-medium text-muted-foreground">Email</span>
@@ -84,7 +67,6 @@ if (checking) return <div style={{padding: "2rem"}}>Checking...</div>;
             />
           </label>
           {error && <p className="mt-3 text-xs text-destructive">{error}</p>}
-
           <button
             type="submit"
             disabled={loading}
@@ -92,7 +74,6 @@ if (checking) return <div style={{padding: "2rem"}}>Checking...</div>;
           >
             {loading ? "Masuk..." : "Masuk"}
           </button>
-
           <Link
             to="/"
             className="mt-4 block text-center text-xs text-muted-foreground hover:text-foreground"

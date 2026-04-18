@@ -10,15 +10,20 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StationsRouteImport } from './routes/stations'
+import { Route as AdminLoginRouteImport } from './routes/admin-login'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as StationStationIdRouteImport } from './routes/station.$stationId'
 import { Route as BookRoomIdRouteImport } from './routes/book.$roomId'
-import { Route as AdminLoginRouteImport } from './routes/admin.login'
 
 const StationsRoute = StationsRouteImport.update({
   id: '/stations',
   path: '/stations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLoginRoute = AdminLoginRouteImport.update({
+  id: '/admin-login',
+  path: '/admin-login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminRoute = AdminRouteImport.update({
@@ -41,34 +46,29 @@ const BookRoomIdRoute = BookRoomIdRouteImport.update({
   path: '/book/$roomId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminLoginRoute = AdminLoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => AdminRoute,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRouteWithChildren
+  '/admin': typeof AdminRoute
+  '/admin-login': typeof AdminLoginRoute
   '/stations': typeof StationsRoute
-  '/admin/login': typeof AdminLoginRoute
   '/book/$roomId': typeof BookRoomIdRoute
   '/station/$stationId': typeof StationStationIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRouteWithChildren
+  '/admin': typeof AdminRoute
+  '/admin-login': typeof AdminLoginRoute
   '/stations': typeof StationsRoute
-  '/admin/login': typeof AdminLoginRoute
   '/book/$roomId': typeof BookRoomIdRoute
   '/station/$stationId': typeof StationStationIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRouteWithChildren
+  '/admin': typeof AdminRoute
+  '/admin-login': typeof AdminLoginRoute
   '/stations': typeof StationsRoute
-  '/admin/login': typeof AdminLoginRoute
   '/book/$roomId': typeof BookRoomIdRoute
   '/station/$stationId': typeof StationStationIdRoute
 }
@@ -77,31 +77,32 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/admin'
+    | '/admin-login'
     | '/stations'
-    | '/admin/login'
     | '/book/$roomId'
     | '/station/$stationId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/admin'
+    | '/admin-login'
     | '/stations'
-    | '/admin/login'
     | '/book/$roomId'
     | '/station/$stationId'
   id:
     | '__root__'
     | '/'
     | '/admin'
+    | '/admin-login'
     | '/stations'
-    | '/admin/login'
     | '/book/$roomId'
     | '/station/$stationId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRouteWithChildren
+  AdminRoute: typeof AdminRoute
+  AdminLoginRoute: typeof AdminLoginRoute
   StationsRoute: typeof StationsRoute
   BookRoomIdRoute: typeof BookRoomIdRoute
   StationStationIdRoute: typeof StationStationIdRoute
@@ -114,6 +115,13 @@ declare module '@tanstack/react-router' {
       path: '/stations'
       fullPath: '/stations'
       preLoaderRoute: typeof StationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-login': {
+      id: '/admin-login'
+      path: '/admin-login'
+      fullPath: '/admin-login'
+      preLoaderRoute: typeof AdminLoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -144,29 +152,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BookRoomIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/login': {
-      id: '/admin/login'
-      path: '/login'
-      fullPath: '/admin/login'
-      preLoaderRoute: typeof AdminLoginRouteImport
-      parentRoute: typeof AdminRoute
-    }
   }
 }
 
-interface AdminRouteChildren {
-  AdminLoginRoute: typeof AdminLoginRoute
-}
-
-const AdminRouteChildren: AdminRouteChildren = {
-  AdminLoginRoute: AdminLoginRoute,
-}
-
-const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRouteWithChildren,
+  AdminRoute: AdminRoute,
+  AdminLoginRoute: AdminLoginRoute,
   StationsRoute: StationsRoute,
   BookRoomIdRoute: BookRoomIdRoute,
   StationStationIdRoute: StationStationIdRoute,
