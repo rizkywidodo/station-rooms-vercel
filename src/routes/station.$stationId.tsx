@@ -1,30 +1,20 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, MapPin, Users } from "lucide-react";
+import { ArrowLeft, ArrowRight, Users } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
-import { BookingCalendar } from "@/components/booking-calendar";
-import {
-  ROOM_TYPE_LABEL,
-  getRoomsByStation,
-  getStation,
-  type Room,
-  type Station,
-} from "@/lib/dummy-data";
+import { ROOM_TYPE_LABEL, type Room, type Station } from "@/lib/dummy-data";
+import { getRooms, getStations } from "@/lib/db";
 
 export const Route = createFileRoute("/station/$stationId")({
-  loader: ({ params }): { station: Station; rooms: Room[] } => {
-    const station = getStation(params.stationId);
+  ssr: false,
+  loader: async ({ params }): Promise<{ station: Station; rooms: Room[] }> => {
+    const [stations, rooms] = await Promise.all([getStations(), getRooms()]);
+    const station = stations.find((s) => s.id === params.stationId);
     if (!station) throw notFound();
-    const rooms = getRoomsByStation(station.id);
-    return { station, rooms };
+    const stationRooms = rooms.filter((r) => r.stationId === station.id);
+    return { station, rooms: stationRooms };
   },
   head: ({ loaderData }) => ({
-    meta: [
-      { title: `${loaderData?.station.name ?? "Stasiun"} · Booking MRT Jakarta` },
-      {
-        name: "description",
-        content: `Pilih ruangan dan lihat ketersediaan di Stasiun ${loaderData?.station.name ?? ""}.`,
-      },
-    ],
+    meta: [{ title: `${loaderData?.station.name ?? "Stasiun"} · Booking MRT Jakarta` }],
   }),
   notFoundComponent: () => (
     <div className="min-h-screen">
@@ -41,67 +31,50 @@ export const Route = createFileRoute("/station/$stationId")({
 });
 
 function StationPage() {
-  const data = Route.useLoaderData() as { station: Station; rooms: Room[] };
-  const { station, rooms } = data;
+  const { station, rooms } = Route.useLoaderData() as { station: Station; rooms: Room[] };
 
   return (
     <div className="min-h-screen">
       <SiteHeader />
-
-      <section className="mx-auto max-w-6xl px-4 pt-8 sm:px-6">
-        <Link
-          to="/stations"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
-        >
+      <section className="mx-auto max-w-7xl px-4 pt-8 sm:px-6">
+        <Link to="/stations" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> Daftar stasiun
         </Link>
-
-        <div className="mt-4 flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary">
-            <MapPin className="h-5 w-5" />
-          </span>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              Stasiun {station.name}
-            </h1>
-            <p className="text-sm text-muted-foreground">Region {station.region}</p>
-          </div>
+        <div className="mt-6 max-w-xl">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Region {station.region}</p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight sm:text-4xl">Stasiun {station.name}</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Pilih ruangan yang ingin dibooking.</p>
         </div>
       </section>
 
-      <section className="mx-auto mt-6 grid max-w-6xl gap-6 px-4 pb-16 sm:px-6 lg:grid-cols-[1fr_1.1fr]">
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Ruangan tersedia
-          </h2>
-          {rooms.map((r) => (
-            <Link
-              key={r.id}
-              to="/book/$roomId"
-              params={{ roomId: r.id }}
-              className="group flex items-center justify-between rounded-2xl border border-border bg-card p-4 transition hover:border-primary/50 hover:bg-card-elevated sm:p-5"
-            >
-              <div>
-                <div className="text-base font-semibold">{r.name}</div>
-                <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">
-                    {ROOM_TYPE_LABEL[r.type]}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Users className="h-3 w-3" /> {r.capacity} orang
-                  </span>
+      <section className="mx-auto mt-8 max-w-7xl px-4 pb-16 sm:px-6">
+        {rooms.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border py-16 text-center text-sm text-muted-foreground">
+            Belum ada ruangan tersedia di stasiun ini.
+          </div>
+        ) : (
+          <div className="flex flex-col">
+            {rooms.map((r) => (
+              <Link
+                key={r.id}
+                to="/book/$roomId"
+                params={{ roomId: r.id }}
+                className="group flex items-center justify-between border-b border-border py-4 transition hover:opacity-60"
+              >
+                <div>
+                  <div className="font-semibold">{r.name}</div>
+                  <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="text-accent">{ROOM_TYPE_LABEL[r.type]}</span>
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="h-3 w-3" /> {r.capacity} orang
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/15 text-primary transition group-hover:translate-x-1">
-                <ArrowRight className="h-4 w-4" />
-              </span>
-            </Link>
-          ))}
-        </div>
-
-        <div>
-          <BookingCalendar />
-        </div>
+                <ArrowRight className="h-4 w-4 text-success transition group-hover:translate-x-1" />
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

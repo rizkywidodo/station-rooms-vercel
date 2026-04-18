@@ -79,6 +79,41 @@ export async function updateBookingStatus(
   if (error) throw error;
 }
 
+// CRUD Rooms
+export async function addRoom(room: Omit<Room, "id">): Promise<Room> {
+  const id = `${room.stationId}-${room.type}-${Date.now()}`;
+  const { data, error } = await supabase
+    .from("rooms")
+    .insert({
+      id,
+      station_id: room.stationId,
+      name: room.name,
+      type: room.type,
+      capacity: room.capacity,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return { id: data.id, stationId: data.station_id, name: data.name, type: data.type, capacity: data.capacity };
+}
+
+export async function updateRoom(id: string, updates: Partial<Pick<Room, "name" | "type" | "capacity">>): Promise<void> {
+  const { error } = await supabase
+    .from("rooms")
+    .update({
+      ...(updates.name && { name: updates.name }),
+      ...(updates.type && { type: updates.type }),
+      ...(updates.capacity && { capacity: updates.capacity }),
+    })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteRoom(id: string): Promise<void> {
+  const { error } = await supabase.from("rooms").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // Helper
 function dbToBooking(r: any): Booking {
   return {

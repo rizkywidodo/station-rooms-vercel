@@ -15,6 +15,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as StationStationIdRouteImport } from './routes/station.$stationId'
 import { Route as BookRoomIdRouteImport } from './routes/book.$roomId'
+import { Route as AdminManageRouteImport } from './routes/admin/manage'
 
 const StationsRoute = StationsRouteImport.update({
   id: '/stations',
@@ -46,29 +47,37 @@ const BookRoomIdRoute = BookRoomIdRouteImport.update({
   path: '/book/$roomId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminManageRoute = AdminManageRouteImport.update({
+  id: '/manage',
+  path: '/manage',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/admin-login': typeof AdminLoginRoute
   '/stations': typeof StationsRoute
+  '/admin/manage': typeof AdminManageRoute
   '/book/$roomId': typeof BookRoomIdRoute
   '/station/$stationId': typeof StationStationIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/admin-login': typeof AdminLoginRoute
   '/stations': typeof StationsRoute
+  '/admin/manage': typeof AdminManageRoute
   '/book/$roomId': typeof BookRoomIdRoute
   '/station/$stationId': typeof StationStationIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
+  '/admin': typeof AdminRouteWithChildren
   '/admin-login': typeof AdminLoginRoute
   '/stations': typeof StationsRoute
+  '/admin/manage': typeof AdminManageRoute
   '/book/$roomId': typeof BookRoomIdRoute
   '/station/$stationId': typeof StationStationIdRoute
 }
@@ -79,6 +88,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/admin-login'
     | '/stations'
+    | '/admin/manage'
     | '/book/$roomId'
     | '/station/$stationId'
   fileRoutesByTo: FileRoutesByTo
@@ -87,6 +97,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/admin-login'
     | '/stations'
+    | '/admin/manage'
     | '/book/$roomId'
     | '/station/$stationId'
   id:
@@ -95,13 +106,14 @@ export interface FileRouteTypes {
     | '/admin'
     | '/admin-login'
     | '/stations'
+    | '/admin/manage'
     | '/book/$roomId'
     | '/station/$stationId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
+  AdminRoute: typeof AdminRouteWithChildren
   AdminLoginRoute: typeof AdminLoginRoute
   StationsRoute: typeof StationsRoute
   BookRoomIdRoute: typeof BookRoomIdRoute
@@ -152,12 +164,29 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BookRoomIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/manage': {
+      id: '/admin/manage'
+      path: '/manage'
+      fullPath: '/admin/manage'
+      preLoaderRoute: typeof AdminManageRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
 
+interface AdminRouteChildren {
+  AdminManageRoute: typeof AdminManageRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminManageRoute: AdminManageRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
+  AdminRoute: AdminRouteWithChildren,
   AdminLoginRoute: AdminLoginRoute,
   StationsRoute: StationsRoute,
   BookRoomIdRoute: BookRoomIdRoute,

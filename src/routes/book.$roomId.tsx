@@ -4,14 +4,8 @@ import { ArrowLeft, CheckCircle2, MapPin, Users } from "lucide-react";
 import { z } from "zod";
 import { SiteHeader } from "@/components/site-header";
 import { BookingCalendar } from "@/components/booking-calendar";
-import {
-  ROOM_TYPE_LABEL,
-  getRoom,
-  getStation,
-  type Room,
-  type Station,
-} from "@/lib/dummy-data";
-import { addBooking } from "@/lib/db";
+import { getRooms, getStations, addBooking } from "@/lib/db";
+import { ROOM_TYPE_LABEL, type Room, type Station } from "@/lib/dummy-data";
 
 const bookingSchema = z.object({
   requesterName: z.string().trim().min(2, "Nama minimal 2 karakter").max(80),
@@ -26,13 +20,15 @@ const bookingSchema = z.object({
 });
 
 export const Route = createFileRoute("/book/$roomId")({
-  loader: ({ params }): { room: Room; station: Station } => {
-    const room = getRoom(params.roomId);
-    if (!room) throw notFound();
-    const station = getStation(room.stationId);
-    if (!station) throw notFound();
-    return { room, station };
-  },
+  ssr: false,
+  loader: async ({ params }): Promise<{ room: Room; station: Station }> => {
+  const [rooms, stations] = await Promise.all([getRooms(), getStations()]);
+  const room = rooms.find((r) => r.id === params.roomId);
+  if (!room) throw notFound();
+  const station = stations.find((s) => s.id === room.stationId);
+  if (!station) throw notFound();
+  return { room, station };
+},
   head: ({ loaderData }) => ({
     meta: [
       {
@@ -143,6 +139,20 @@ function BookRoomPage() {
     );
   }
 
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+  const currentHour = now.getHours();
+
+  const availableStartHours = Array.from({ length: 11 }, (_, i) => i + 8).filter((h) => {
+    if (date === todayIso) return h > currentHour;
+    return true;
+  });
+
+  const availableEndHours = Array.from({ length: 11 }, (_, i) => i + 9).filter((h) => {
+    if (date === todayIso) return h > currentHour;
+    return true;
+  });
+
   return (
     <div className="min-h-screen">
       <SiteHeader />
@@ -227,12 +237,26 @@ function BookRoomPage() {
               <input name="attendees" type="number" min={1} max={200} placeholder="Cth. 8" className={inputCls} />
             </Field>
 
-            <Field label="Jam mulai" error={errors.startTime}>
-              <input name="startTime" type="time" className={inputCls} />
-            </Field>
-            <Field label="Jam selesai" error={errors.endTime}>
-              <input name="endTime" type="time" className={inputCls} />
-            </Field>
+           <Field label="Jam mulai" error={errors.startTime}>
+            <select name="startTime" className={inputCls} defaultValue="">
+              <option value="" disabled>Pilih jam mulai</option>
+              {availableStartHours.map((h) => (
+                <option key={h} value={`${String(h).padStart(2, "0")}:00`}>
+                  {String(h).padStart(2, "0")}:00
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Jam selesai" error={errors.endTime}>
+            <select name="endTime" className={inputCls} defaultValue="">
+              <option value="" disabled>Pilih jam selesai</option>
+              {availableEndHours.map((h) => (
+                <option key={h} value={`${String(h).padStart(2, "0")}:00`}>
+                  {String(h).padStart(2, "0")}:00
+                </option>
+              ))}
+            </select>
+          </Field>
 
             <div className="sm:col-span-2">
               <Field label="Catatan tambahan (opsional)" error={errors.notes}>
