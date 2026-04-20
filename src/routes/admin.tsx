@@ -3,8 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Calendar, Check, Clock, Mail, Search, Users, X, Plus, Pencil, Trash2 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { STATUS_LABEL, ROOM_TYPE_LABEL, type Booking, type BookingStatus, type Station, type Room, type RoomType } from "@/lib/dummy-data";
-import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs } from "@/lib/db";import { supabase } from "@/lib/supabase";
-import { cn } from "@/lib/utils";
+import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs, deleteBooking } from "@/lib/db";import { cn } from "@/lib/utils";
+import { supabase } from "@/lib/supabase";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin Dashboard · MRT Jakarta Booking" }] }),
@@ -34,8 +34,7 @@ function AdminPage() {
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) navigate({ to: "/admin-login" });
       else setAuthed(true);
-      setAdminEmail(data.session.user.email ?? "admin");
-    });
+      setAdminEmail(data.session?.user?.email ?? "admin");    });
   }, [navigate]);
 
   const fetchAll = async () => {
@@ -103,6 +102,13 @@ function AdminPage() {
   await fetchAll();
 };
 
+const handleDeleteBooking = async (id: number) => {
+  if (!confirm("Hapus booking ini permanen?")) return;
+  await deleteBooking(id);
+  await addLog("DELETE_BOOKING", adminEmail, `Hapus booking #${id}`);
+  await fetchAll();
+};
+
   const tabs: { id: Tab; label: string }[] = [
   { id: "bookings", label: `Pengajuan${counts.pending > 0 ? ` (${counts.pending})` : ""}` },
   { id: "rooms", label: "Ruangan" },
@@ -156,6 +162,7 @@ function AdminPage() {
             roomMap={roomMap}
             stationMap={stationMap}
             onDecide={decide}
+            onDelete={handleDeleteBooking}
           />
         ) : tab === "rooms" ? (
           <RoomsTab stations={stations} rooms={rooms} onRefresh={fetchAll} adminEmail={adminEmail} />
@@ -170,8 +177,7 @@ function AdminPage() {
 }
 
 // ── Bookings Tab ──────────────────────────────────────────────
-function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regionFilter, setRegionFilter, status, setStatus, search, setSearch, roomMap, stationMap, onDecide }: any) {
-  const filteredStations = useMemo(() => {
+function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regionFilter, setRegionFilter, status, setStatus, search, setSearch, roomMap, stationMap, onDecide, onDelete }: any) {  const filteredStations = useMemo(() => {
     if (regionFilter === "all") return stations;
     return stations.filter((s: Station) => String(s.region) === regionFilter);
   }, [stations, regionFilter]);
@@ -209,7 +215,7 @@ function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regi
           <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Tidak ada pengajuan.</div>
         ) : (
           filtered.map((b: Booking) => (
-            <AdminBookingRow key={b.id} booking={b} roomName={roomMap[b.roomId]?.name ?? b.roomId} stationName={stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} onDecide={onDecide} />
+            <AdminBookingRow key={b.id} booking={b} roomName={roomMap[b.roomId]?.name ?? b.roomId} stationName={stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} onDecide={onDecide} onDelete={onDelete} />
           ))
         )}
       </div>
@@ -470,6 +476,7 @@ function LogsTab() {
     DELETE_ROOM: { label: "Hapus Ruangan", color: "bg-destructive/15 text-destructive" },
     ADD_STATION: { label: "Tambah Stasiun", color: "bg-accent/15 text-accent" },
     DELETE_STATION: { label: "Hapus Stasiun", color: "bg-destructive/15 text-destructive" },
+    DELETE_BOOKING: { label: "Hapus Booking", color: "bg-destructive/15 text-destructive" },
   };
 
   const formatDate = (iso: string) => {
@@ -532,7 +539,7 @@ const statusBadge: Record<BookingStatus, string> = {
   rejected: "bg-destructive/15 text-destructive",
 };
 
-function AdminBookingRow({ booking, roomName, stationName, onDecide }: { booking: Booking; roomName: string; stationName: string; onDecide: (b: Booking, s: BookingStatus, reason?: string) => void; }) {
+function AdminBookingRow({ booking, roomName, stationName, onDecide, onDelete }: { booking: Booking; roomName: string; stationName: string; onDecide: (b: Booking, s: BookingStatus, reason?: string) => void; onDelete: (id: number) => void; }) {
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
 
@@ -583,6 +590,15 @@ function AdminBookingRow({ booking, roomName, stationName, onDecide }: { booking
         </p>
       )}
 
+      <div className="mt-3 flex justify-end">
+      <button
+        onClick={() => onDelete(booking.id)}
+        className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-destructive/40 hover:text-destructive cursor-pointer transition"
+      >
+        <Trash2 className="h-3 w-3" /> Hapus Booking
+      </button>
+    </div>
+
       {showRejectDialog && (
         <div className="mt-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4">
           <p className="mb-2 text-xs font-semibold text-destructive">Alasan penolakan</p>
@@ -612,3 +628,4 @@ function AdminBookingRow({ booking, roomName, stationName, onDecide }: { booking
     </div>
   );
 }
+

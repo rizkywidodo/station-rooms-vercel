@@ -148,3 +148,8 @@ function dbToBooking(r: any): Booking {
     rejectionReason: r.rejection_reason ?? undefined,
   };
 }
+
+export async function deleteBooking(id: number): Promise<void> {
+  const { error } = await supabase.from("bookings").delete().eq("id", id);
+  if (error) throw error;
+}
