@@ -35,6 +35,9 @@ function IndexPage() {
   const [regionFilter, setRegionFilter] = useState<string>("all");
   const [stationFilter, setStationFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "date">("newest");
+  const PER_PAGE = 8;
 
   useEffect(() => {
     Promise.all([getBookings(), getRooms(), getStations()]).then(([b, r, s]) => {
@@ -61,33 +64,44 @@ function IndexPage() {
     stations.filter((s) => s.region === region);
 
   const filteredStationsForDropdown = useMemo(() => {
-    if (regionFilter === "all") return stations.filter((s) => stationHasRooms(s.id));
-    return stations.filter((s) => String(s.region) === regionFilter && stationHasRooms(s.id));
-  }, [stations, rooms, regionFilter]);
+  if (regionFilter === "all") return stations.filter((s) => stationHasRooms(s.id));
+  return stations.filter((s) => String(s.region) === regionFilter && stationHasRooms(s.id));
+}, [stations, rooms, regionFilter]);
 
-  const filtered = useMemo(() => {
-    return bookings
-      .filter((b) => statusFilter === "all" ? true : b.status === statusFilter)
-      .filter((b) => selectedDate ? b.date === selectedDate : true)
-      .filter((b) => {
-        if (stationFilter !== "all") return roomMap[b.roomId]?.stationId === stationFilter;
-        if (regionFilter !== "all") {
-          const stId = roomMap[b.roomId]?.stationId;
-          const st = stationMap[stId];
-          return String(st?.region) === regionFilter;
-        }
-        return true;
-      })
-      .filter((b) => {
-        if (!search.trim()) return true;
-        const q = search.toLowerCase();
-        return (
-          b.requesterName.toLowerCase().includes(q) ||
-          b.origin.toLowerCase().includes(q) ||
-          String(b.id).includes(q)
-        );
-      });
-  }, [bookings, search, statusFilter, selectedDate, regionFilter, stationFilter, roomMap, stationMap]);
+const filtered = useMemo(() => {
+  const result = bookings
+    .filter((b) => statusFilter === "all" ? true : b.status === statusFilter)
+    .filter((b) => selectedDate ? b.date === selectedDate : true)
+    .filter((b) => {
+      if (stationFilter !== "all") return roomMap[b.roomId]?.stationId === stationFilter;
+      if (regionFilter !== "all") {
+        const stId = roomMap[b.roomId]?.stationId;
+        const st = stationMap[stId];
+        return String(st?.region) === regionFilter;
+      }
+      return true;
+    })
+    .filter((b) => {
+      if (!search.trim()) return true;
+      const q = search.toLowerCase();
+      return (
+        b.requesterName.toLowerCase().includes(q) ||
+        b.origin.toLowerCase().includes(q) ||
+        String(b.id).includes(q)
+      );
+    })
+    .sort((a, b) => {
+      if (sortBy === "newest") return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      if (sortBy === "oldest") return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      return a.date < b.date ? -1 : 1;
+    });
+  return result;
+}, [bookings, search, statusFilter, selectedDate, regionFilter, stationFilter, roomMap, stationMap, sortBy]);
+
+const totalPages = Math.ceil(filtered.length / PER_PAGE);
+const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+useEffect(() => { setPage(1); }, [search, statusFilter, selectedDate, regionFilter, stationFilter, sortBy]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -173,65 +187,105 @@ function IndexPage() {
           <p className="mt-1 text-sm text-muted-foreground">Semua pengajuan yang masuk</p>
         </div>
 
-        <div className="mb-5 flex flex-wrap gap-3">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Cari nama, divisi, ID..."
+                className="w-48 rounded-xl border border-border bg-white py-2.5 pl-9 pr-3 text-sm focus:border-primary focus:outline-none"
+              />
+            </div>
+            <select
+              value={regionFilter}
+              onChange={(e) => { setRegionFilter(e.target.value); setStationFilter("all"); }}
+              className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+            >
+              <option value="all">Semua Region</option>
+              <option value="1">Region 1</option>
+              <option value="2">Region 2</option>
+              <option value="3">Region 3</option>
+            </select>
+            <select
+              value={stationFilter}
+              onChange={(e) => setStationFilter(e.target.value)}
+              className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+            >
+              <option value="all">Semua Stasiun</option>
+              {filteredStationsForDropdown.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
             <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari nama, divisi, ID..."
-              className="w-48 rounded-xl border border-border bg-white py-2.5 pl-9 pr-3 text-sm focus:border-primary focus:outline-none"
+              type="date"
+              value={selectedDate ?? ""}
+              onChange={(e) => setSelectedDate(e.target.value || undefined)}
+              className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
             />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as BookingStatus | "all")}
+              className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
+            >
+              <option value="all">Semua Status</option>
+              <option value="pending">Menunggu</option>
+              <option value="confirmed">Terkonfirmasi</option>
+              <option value="rejected">Ditolak</option>
+            </select>
           </div>
-          <select
-            value={regionFilter}
-            onChange={(e) => { setRegionFilter(e.target.value); setStationFilter("all"); }}
-            className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
-          >
-            <option value="all">Semua Region</option>
-            <option value="1">Region 1</option>
-            <option value="2">Region 2</option>
-            <option value="3">Region 3</option>
-          </select>
-          <select
-            value={stationFilter}
-            onChange={(e) => setStationFilter(e.target.value)}
-            className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
-          >
-            <option value="all">Semua Stasiun</option>
-            {filteredStationsForDropdown.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-          <input
-            type="date"
-            value={selectedDate ?? ""}
-            onChange={(e) => setSelectedDate(e.target.value || undefined)}
-            className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as BookingStatus | "all")}
-            className="rounded-xl border border-border bg-white px-3 py-2.5 text-sm focus:border-primary focus:outline-none"
-          >
-            <option value="all">Semua Status</option>
-            <option value="pending">Menunggu</option>
-            <option value="confirmed">Terkonfirmasi</option>
-            <option value="rejected">Ditolak</option>
-          </select>
-        </div>
+
+  <div className="flex items-center gap-2">
+    <span className="text-xs text-muted-foreground">Urutkan:</span>
+    <div className="flex rounded-xl border border-border bg-white overflow-hidden">
+      {(["newest", "oldest", "date"] as const).map((s) => (
+        <button
+          key={s}
+          onClick={() => setSortBy(s)}
+          className={cn(
+            "px-3 py-2 text-xs font-medium transition cursor-pointer",
+            sortBy === s ? "bg-primary text-white" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          {s === "newest" ? "Terbaru" : s === "oldest" ? "Terlama" : "Tanggal"}
+        </button>
+      ))}
+    </div>
+  </div>
+</div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          {loading ? (
-            <div className="col-span-full py-16 text-center text-sm text-muted-foreground">Memuat...</div>
-          ) : filtered.length === 0 ? (
-            <div className={cn("col-span-full rounded-2xl border border-dashed border-border py-16 text-center text-sm text-muted-foreground")}>
-              Belum ada booking.
-            </div>
-          ) : (
-            filtered.map((b) => <BookingCard key={b.id} booking={b} />)
-          )}
+        {loading ? (
+          <div className="col-span-full py-16 text-center text-sm text-muted-foreground">Memuat...</div>
+        ) : filtered.length === 0 ? (
+          <div className={cn("col-span-full rounded-2xl border border-dashed border-border py-16 text-center text-sm text-muted-foreground")}>
+            Belum ada booking.
+          </div>
+        ) : (
+          paginated.map((b) => <BookingCard key={b.id} booking={b} />)
+        )}
+      </div>
+
+      {!loading && totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-center gap-2">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer"
+          >
+            ← Prev
+          </button>
+          <span className="text-sm text-muted-foreground">{page} / {totalPages}</span>
+          <button
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages}
+            className="rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer"
+          >
+            Next →
+          </button>
         </div>
+)}
       </section>
 
       <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
