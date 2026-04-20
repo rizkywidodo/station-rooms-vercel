@@ -29,9 +29,10 @@ export function SiteHeader() {
   }, []);
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setDropdownOpen(false);
-  };
+  await supabase.auth.signOut();
+  setDropdownOpen(false);
+  window.location.href = "/";
+};
 
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-white/90 backdrop-blur-xl">
