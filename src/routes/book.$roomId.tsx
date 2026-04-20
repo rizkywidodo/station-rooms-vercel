@@ -4,8 +4,9 @@ import { ArrowLeft, CheckCircle2, MapPin, Users } from "lucide-react";
 import { z } from "zod";
 import { SiteHeader } from "@/components/site-header";
 import { BookingCalendar } from "@/components/booking-calendar";
-import { getRooms, getStations, addBooking } from "@/lib/db";
+import { getRooms, getStations, addBooking, addLog } from "@/lib/db";
 import { ROOM_TYPE_LABEL, type Room, type Station } from "@/lib/dummy-data";
+
 
 const bookingSchema = z.object({
   requesterName: z.string().trim().min(2, "Nama minimal 2 karakter").max(80),
@@ -100,13 +101,18 @@ function BookRoomPage() {
         startTime: d.startTime,
         endTime: d.endTime,
       });
-      setSubmittedId(created.id);
+    setSubmittedId(created.id);
+    await addLog(
+      "SUBMIT_BOOKING",
+      d.email,
+      `Booking #${created.id} - ${station.name} · ${room.name} (${d.date} ${d.startTime}-${d.endTime})`
+    );
     } catch (err) {
       setErrors({ submit: "Gagal mengirim booking. Coba lagi." });
     } finally {
       setSubmitting(false);
     }
-  };
+    };
 
   if (submittedId !== null) {
     return (

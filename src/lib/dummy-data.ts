@@ -31,6 +31,7 @@ export interface Booking {
   endTime: string; // HH:mm
   status: BookingStatus;
   createdAt: string;
+  rejectionReason?: string;
 }
 
 export const STATIONS: Station[] = [

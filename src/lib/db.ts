@@ -70,11 +70,12 @@ export async function addBooking(
 
 export async function updateBookingStatus(
   id: number,
-  status: BookingStatus
+  status: BookingStatus,
+  rejectionReason?: string
 ): Promise<void> {
   const { error } = await supabase
     .from("bookings")
-    .update({ status })
+    .update({ status, ...(rejectionReason && { rejection_reason: rejectionReason }) })
     .eq("id", id);
   if (error) throw error;
 }
@@ -114,6 +115,21 @@ export async function deleteRoom(id: string): Promise<void> {
   if (error) throw error;
 }
 
+// Activity Logs
+export async function addLog(action: string, actor: string, detail?: string): Promise<void> {
+  await supabase.from("activity_logs").insert({ action, actor, detail });
+}
+
+export async function getLogs(): Promise<{ id: number; action: string; actor: string; detail: string | null; created_at: string }[]> {
+  const { data, error } = await supabase
+    .from("activity_logs")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (error) throw error;
+  return data;
+}
+
 // Helper
 function dbToBooking(r: any): Booking {
   return {
@@ -129,5 +145,6 @@ function dbToBooking(r: any): Booking {
     endTime: r.end_time,
     status: r.status as BookingStatus,
     createdAt: r.created_at,
+    rejectionReason: r.rejection_reason ?? undefined,
   };
 }

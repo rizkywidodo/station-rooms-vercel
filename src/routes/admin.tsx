@@ -3,8 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Calendar, Check, Clock, Mail, Search, Users, X, Plus, Pencil, Trash2 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { STATUS_LABEL, ROOM_TYPE_LABEL, type Booking, type BookingStatus, type Station, type Room, type RoomType } from "@/lib/dummy-data";
-import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom } from "@/lib/db";
-import { supabase } from "@/lib/supabase";
+import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs } from "@/lib/db";import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin")({
@@ -13,7 +12,7 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-type Tab = "bookings" | "rooms" | "stations";
+type Tab = "bookings" | "rooms" | "stations" | "logs";
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -29,11 +28,13 @@ function AdminPage() {
   const [status, setStatus] = useState<BookingStatus | "all">("all");
   const [stationFilter, setStationFilter] = useState("all");
   const [regionFilter, setRegionFilter] = useState("all");
+  const [adminEmail, setAdminEmail] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (!data.session) navigate({ to: "/admin-login" });
       else setAuthed(true);
+      setAdminEmail(data.session.user.email ?? "admin");
     });
   }, [navigate]);
 
@@ -74,7 +75,7 @@ function AdminPage() {
           (room?.name.toLowerCase().includes(q) ?? false)
         );
       })
-      .sort((a, b) => (a.date < b.date ? -1 : 1));
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [bookings, status, stationFilter, regionFilter, search, roomMap, stationMap, stations]);
 
   const counts = useMemo(() => ({
@@ -85,23 +86,29 @@ function AdminPage() {
 
   if (!authed) return null;
 
-  const decide = async (b: Booking, decision: BookingStatus) => {
-    await updateBookingStatus(b.id, decision);
-    if (decision === "confirmed") {
-      const conflicts = bookings.filter((other) => {
-        if (other.id === b.id || other.status !== "pending" || other.roomId !== b.roomId || other.date !== b.date) return false;
-        return !(other.endTime <= b.startTime || other.startTime >= b.endTime);
-      });
-      await Promise.all(conflicts.map((c) => updateBookingStatus(c.id, "rejected")));
-    }
-    await fetchAll();
-  };
+  const decide = async (b: Booking, decision: BookingStatus, reason?: string) => {
+  await updateBookingStatus(b.id, decision, reason);
+  if (decision === "confirmed") {
+    const conflicts = bookings.filter((other) => {
+      if (other.id === b.id || other.status !== "pending" || other.roomId !== b.roomId || other.date !== b.date) return false;
+      return !(other.endTime <= b.startTime || other.startTime >= b.endTime);
+    });
+    await Promise.all(conflicts.map((c) => updateBookingStatus(c.id, "rejected")));
+  }
+  await addLog(
+    decision === "confirmed" ? "APPROVE_BOOKING" : "REJECT_BOOKING",
+    adminEmail,
+    `Booking #${b.id} - ${stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} · ${roomMap[b.roomId]?.name ?? ""} (${b.requesterName})${reason ? ` — Alasan: ${reason}` : ""}`
+  );
+  await fetchAll();
+};
 
   const tabs: { id: Tab; label: string }[] = [
-    { id: "bookings", label: `Pengajuan${counts.pending > 0 ? ` (${counts.pending})` : ""}` },
-    { id: "rooms", label: "Ruangan" },
-    { id: "stations", label: "Stasiun" },
-  ];
+  { id: "bookings", label: `Pengajuan${counts.pending > 0 ? ` (${counts.pending})` : ""}` },
+  { id: "rooms", label: "Ruangan" },
+  { id: "stations", label: "Stasiun" },
+  { id: "logs", label: "Log Aktivitas" },
+];
 
   return (
     <div className="min-h-screen">
@@ -151,9 +158,11 @@ function AdminPage() {
             onDecide={decide}
           />
         ) : tab === "rooms" ? (
-          <RoomsTab stations={stations} rooms={rooms} onRefresh={fetchAll} />
+          <RoomsTab stations={stations} rooms={rooms} onRefresh={fetchAll} adminEmail={adminEmail} />
+       ) : tab === "stations" ? (
+  <StationsTab stations={stations} rooms={rooms} onRefresh={fetchAll} adminEmail={adminEmail} />
         ) : (
-          <StationsTab stations={stations} rooms={rooms} onRefresh={fetchAll} />
+          <LogsTab />
         )}
       </section>
     </div>
@@ -209,7 +218,7 @@ function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regi
 }
 
 // ── Rooms Tab ──────────────────────────────────────────────
-function RoomsTab({ stations, rooms, onRefresh }: { stations: Station[]; rooms: Room[]; onRefresh: () => void }) {
+function RoomsTab({ stations, rooms, onRefresh, adminEmail }: { stations: Station[]; rooms: Room[]; onRefresh: () => void; adminEmail: string }) {
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
   const [addingToStation, setAddingToStation] = useState<string | null>(null);
   const [newRoom, setNewRoom] = useState({ name: "", type: "meeting" as RoomType, capacity: 10 });
@@ -222,6 +231,7 @@ function RoomsTab({ stations, rooms, onRefresh }: { stations: Station[]; rooms: 
     setSaving(true);
     try {
       await addRoom({ stationId, name: newRoom.name, type: newRoom.type, capacity: newRoom.capacity });
+      await addLog("ADD_ROOM", adminEmail, `Tambah ruangan "${newRoom.name}" di ${stations.find(s => s.id === stationId)?.name}`);
       setAddingToStation(null);
       setNewRoom({ name: "", type: "meeting", capacity: 10 });
       onRefresh();
@@ -234,6 +244,7 @@ function RoomsTab({ stations, rooms, onRefresh }: { stations: Station[]; rooms: 
     setSaving(true);
     try {
       await updateRoom(editingRoom.id, { name: editingRoom.name, type: editingRoom.type, capacity: editingRoom.capacity });
+      await addLog("UPDATE_ROOM", adminEmail, `Edit ruangan "${editingRoom.name}"`);
       setEditingRoom(null);
       onRefresh();
     } catch { alert("Gagal mengupdate ruangan"); }
@@ -242,8 +253,12 @@ function RoomsTab({ stations, rooms, onRefresh }: { stations: Station[]; rooms: 
 
   const handleDelete = async (id: string) => {
     if (!confirm("Hapus ruangan ini?")) return;
-    try { await deleteRoom(id); onRefresh(); }
-    catch { alert("Gagal menghapus ruangan"); }
+    const room = rooms.find(r => r.id === id);
+    try {
+      await deleteRoom(id);
+      await addLog("DELETE_ROOM", adminEmail, `Hapus ruangan "${room?.name ?? id}"`);
+      onRefresh();
+    } catch { alert("Gagal menghapus ruangan"); }
   };
 
   return (
@@ -348,7 +363,7 @@ function RoomsTab({ stations, rooms, onRefresh }: { stations: Station[]; rooms: 
 }
 
 // ── Stations Tab ──────────────────────────────────────────────
-function StationsTab({ stations, rooms, onRefresh }: { stations: Station[]; rooms: Room[]; onRefresh: () => void }) {
+function StationsTab({ stations, rooms, onRefresh, adminEmail }: { stations: Station[]; rooms: Room[]; onRefresh: () => void; adminEmail: string }) {
   const [adding, setAdding] = useState(false);
   const [newStation, setNewStation] = useState({ name: "", region: 1 as 1 | 2 | 3 });
   const [saving, setSaving] = useState(false);
@@ -360,6 +375,7 @@ function StationsTab({ stations, rooms, onRefresh }: { stations: Station[]; room
       const id = newStation.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
       const { error } = await supabase.from("stations").insert({ id, name: newStation.name, region: newStation.region });
       if (error) throw error;
+      await addLog("ADD_STATION", adminEmail, `Tambah stasiun "${newStation.name}" Region ${newStation.region}`);
       setAdding(false);
       setNewStation({ name: "", region: 1 });
       onRefresh();
@@ -377,6 +393,7 @@ function StationsTab({ stations, rooms, onRefresh }: { stations: Station[]; room
     try {
       const { error } = await supabase.from("stations").delete().eq("id", id);
       if (error) throw error;
+      await addLog("DELETE_STATION", adminEmail, `Hapus stasiun "${name}"`);
       onRefresh();
     } catch { alert("Gagal menghapus stasiun"); }
   };
@@ -424,10 +441,7 @@ function StationsTab({ stations, rooms, onRefresh }: { stations: Station[]; room
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-[11px] font-mono text-muted-foreground/50">{s.id}</span>
-                <button
-                  onClick={() => handleDelete(s.id, s.name)}
-                  className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-destructive/40 hover:text-destructive"
-                >
+                <button onClick={() => handleDelete(s.id, s.name)} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-destructive/40 hover:text-destructive">
                   <Trash2 className="h-3 w-3" /> Hapus
                 </button>
               </div>
@@ -435,6 +449,68 @@ function StationsTab({ stations, rooms, onRefresh }: { stations: Station[]; room
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function LogsTab() {
+  const [logs, setLogs] = useState<{ id: number; action: string; actor: string; detail: string | null; created_at: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getLogs().then((data) => { setLogs(data); setLoading(false); });
+  }, []);
+
+  const actionLabel: Record<string, { label: string; color: string }> = {
+    SUBMIT_BOOKING: { label: "Ajukan Booking", color: "bg-primary/15 text-primary" },
+    APPROVE_BOOKING: { label: "Setujui Booking", color: "bg-success/15 text-success" },
+    REJECT_BOOKING: { label: "Tolak Booking", color: "bg-destructive/15 text-destructive" },
+    ADD_ROOM: { label: "Tambah Ruangan", color: "bg-accent/15 text-accent" },
+    UPDATE_ROOM: { label: "Edit Ruangan", color: "bg-warning/15 text-warning" },
+    DELETE_ROOM: { label: "Hapus Ruangan", color: "bg-destructive/15 text-destructive" },
+    ADD_STATION: { label: "Tambah Stasiun", color: "bg-accent/15 text-accent" },
+    DELETE_STATION: { label: "Hapus Stasiun", color: "bg-destructive/15 text-destructive" },
+  };
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) +
+      " · " + d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  return (
+    <div>
+      <div className="mb-5 flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">{logs.length} aktivitas tercatat</p>
+        <button onClick={() => { setLoading(true); getLogs().then((data) => { setLogs(data); setLoading(false); }); }} className="text-xs text-primary hover:underline">
+          Refresh
+        </button>
+      </div>
+      {loading ? (
+        <div className="py-10 text-center text-sm text-muted-foreground">Memuat...</div>
+      ) : logs.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Belum ada aktivitas.</div>
+      ) : (
+        <div className="flex flex-col">
+          {logs.map((log) => {
+            const info = actionLabel[log.action] ?? { label: log.action, color: "bg-muted text-muted-foreground" };
+            return (
+              <div key={log.id} className="flex items-start justify-between border-b border-border py-3 gap-4">
+                <div className="flex items-start gap-3 min-w-0 flex-1">
+                  <span className={cn("shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap", info.color)}>
+                    {info.label}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-foreground truncate">{log.detail ?? "-"}</p>
+                    <p className="text-xs text-muted-foreground">{log.actor}</p>
+                  </div>
+                </div>
+                <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">{formatDate(log.created_at)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -456,7 +532,10 @@ const statusBadge: Record<BookingStatus, string> = {
   rejected: "bg-destructive/15 text-destructive",
 };
 
-function AdminBookingRow({ booking, roomName, stationName, onDecide }: { booking: Booking; roomName: string; stationName: string; onDecide: (b: Booking, s: BookingStatus) => void; }) {
+function AdminBookingRow({ booking, roomName, stationName, onDecide }: { booking: Booking; roomName: string; stationName: string; onDecide: (b: Booking, s: BookingStatus, reason?: string) => void; }) {
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+
   return (
     <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
       <div className="flex flex-row items-center justify-between w-full gap-4">
@@ -480,13 +559,13 @@ function AdminBookingRow({ booking, roomName, stationName, onDecide }: { booking
           <div className="flex shrink-0 flex-row gap-2 items-center">
             <button
               onClick={() => onDecide(booking, "confirmed")}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-success/10 px-4 py-2 text-xs font-semibold text-success transition hover:bg-success/20 whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-xs font-semibold text-success transition-all duration-200 hover:bg-success hover:text-white hover:border-success hover:scale-105 cursor-pointer whitespace-nowrap"
             >
               <Check className="h-3.5 w-3.5" /> Setujui
             </button>
             <button
-              onClick={() => onDecide(booking, "rejected")}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-destructive/10 px-4 py-2 text-xs font-semibold text-destructive transition hover:bg-destructive/20 whitespace-nowrap"
+              onClick={() => setShowRejectDialog(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2 text-xs font-semibold text-destructive transition-all duration-200 hover:bg-destructive hover:text-white hover:border-destructive hover:scale-105 cursor-pointer whitespace-nowrap"
             >
               <X className="h-3.5 w-3.5" /> Tolak
             </button>
@@ -497,6 +576,38 @@ function AdminBookingRow({ booking, roomName, stationName, onDecide }: { booking
         <p className="mt-3 w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <strong className="text-foreground/70">Catatan:</strong> {booking.notes}
         </p>
+      )}
+      {booking.status === "rejected" && booking.rejectionReason && (
+        <p className="mt-3 w-full rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          <strong>Alasan penolakan:</strong> {booking.rejectionReason}
+        </p>
+      )}
+
+      {showRejectDialog && (
+        <div className="mt-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4">
+          <p className="mb-2 text-xs font-semibold text-destructive">Alasan penolakan</p>
+          <textarea
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            placeholder="Cth. Ruangan sudah penuh di jam tersebut..."
+            rows={2}
+            className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-destructive focus:outline-none resize-none"
+          />
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={() => { onDecide(booking, "rejected", rejectReason); setShowRejectDialog(false); setRejectReason(""); }}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-destructive px-4 py-2 text-xs font-semibold text-white hover:brightness-110 cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" /> Konfirmasi Tolak
+            </button>
+            <button
+              onClick={() => { setShowRejectDialog(false); setRejectReason(""); }}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
+            >
+              Batal
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
