@@ -37,7 +37,11 @@ function IndexPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "date">("newest");
-  const PER_PAGE = 8;
+  const [perPage, setPerPage] = useState(8);
+
+  useEffect(() => {
+    if (window.innerWidth < 768) setPerPage(4);
+  }, []);
 
   useEffect(() => {
     Promise.all([getBookings(), getRooms(), getStations()]).then(([b, r, s]) => {
@@ -71,6 +75,14 @@ function IndexPage() {
 const filtered = useMemo(() => {
   const result = bookings
     .filter((b) => statusFilter === "all" ? true : b.status === statusFilter)
+    .filter((b) => {
+  const bookingDate = new Date(b.date + "T00:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const sevenDaysLater = new Date(today);
+  sevenDaysLater.setDate(today.getDate() + 7);
+  return bookingDate >= today && bookingDate <= sevenDaysLater;
+})
     .filter((b) => selectedDate ? b.date === selectedDate : true)
     .filter((b) => {
       if (stationFilter !== "all") return roomMap[b.roomId]?.stationId === stationFilter;
@@ -98,8 +110,8 @@ const filtered = useMemo(() => {
   return result;
 }, [bookings, search, statusFilter, selectedDate, regionFilter, stationFilter, roomMap, stationMap, sortBy]);
 
-const totalPages = Math.ceil(filtered.length / PER_PAGE);
-const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+const totalPages = Math.ceil(filtered.length / perPage);
+const paginated = filtered.slice((page - 1) * perPage, page * perPage);
 
 useEffect(() => { setPage(1); }, [search, statusFilter, selectedDate, regionFilter, stationFilter, sortBy]);
 
@@ -194,7 +206,7 @@ useEffect(() => { setPage(1); }, [search, statusFilter, selectedDate, regionFilt
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Cari nama, divisi, ID..."
+                placeholder="Cari nama, departemen, ID..."
                 className="w-48 rounded-xl border border-border bg-white py-2.5 pl-9 pr-3 text-sm focus:border-primary focus:outline-none"
               />
             </div>

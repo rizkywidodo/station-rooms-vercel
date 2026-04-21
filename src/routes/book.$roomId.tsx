@@ -226,7 +226,7 @@ function BookRoomPage() {
                 <ToggleBtn active={originType === "mitra"} onClick={() => setOriginType("mitra")}>Mitra Kerja</ToggleBtn>
               </div>
             </Field>
-            <Field label={originType === "mrt" ? "Divisi" : "Nama perusahaan / mitra"} error={errors.originDetail}>
+            <Field label={originType === "mrt" ? "Departemen" : "Nama perusahaan / mitra"} error={errors.originDetail}>
               <input name="originDetail" placeholder={originType === "mrt" ? "Cth. TCM, Quality" : "Cth. PT VMI"} className={inputCls} maxLength={80} />
             </Field>
 

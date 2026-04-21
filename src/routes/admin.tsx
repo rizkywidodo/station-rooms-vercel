@@ -176,8 +176,15 @@ const handleDeleteBooking = async (id: number) => {
   );
 }
 
-// ── Bookings Tab ──────────────────────────────────────────────
-function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regionFilter, setRegionFilter, status, setStatus, search, setSearch, roomMap, stationMap, onDecide, onDelete }: any) {  const filteredStations = useMemo(() => {
+function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regionFilter, setRegionFilter, status, setStatus, search, setSearch, roomMap, stationMap, onDecide, onDelete }: any) {
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 6;
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  useEffect(() => { setPage(1); }, [filtered]);
+
+  const filteredStations = useMemo(() => {
     if (regionFilter === "all") return stations;
     return stations.filter((s: Station) => String(s.region) === regionFilter);
   }, [stations, regionFilter]);
@@ -187,13 +194,9 @@ function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regi
       <div className="mb-5 flex flex-wrap gap-2">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama, divisi..." className="w-48 rounded-xl border border-border bg-white py-2 pl-9 pr-3 text-sm focus:border-primary focus:outline-none" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari nama, departemen..." className="w-48 rounded-xl border border-border bg-white py-2 pl-9 pr-3 text-sm focus:border-primary focus:outline-none" />
         </div>
-        <select
-          value={regionFilter}
-          onChange={(e) => { setRegionFilter(e.target.value); setStationFilter("all"); }}
-          className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
-        >
+        <select value={regionFilter} onChange={(e) => { setRegionFilter(e.target.value); setStationFilter("all"); }} className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none">
           <option value="all">Semua Region</option>
           <option value="1">Region 1</option>
           <option value="2">Region 2</option>
@@ -210,19 +213,31 @@ function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regi
           <option value="rejected">Ditolak</option>
         </select>
       </div>
-      <div className="space-y-3">
+
+      <div className="grid gap-3 sm:grid-cols-2">
         {filtered.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Tidak ada pengajuan.</div>
+          <div className="col-span-2 rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Tidak ada pengajuan.</div>
         ) : (
-          filtered.map((b: Booking) => (
+          paginated.map((b: Booking) => (
             <AdminBookingRow key={b.id} booking={b} roomName={roomMap[b.roomId]?.name ?? b.roomId} stationName={stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} onDecide={onDecide} onDelete={onDelete} />
           ))
         )}
       </div>
+
+      {totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-center gap-2">
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">
+            ← Prev
+          </button>
+          <span className="text-sm text-muted-foreground">{page} / {totalPages}</span>
+          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">
+            Next →
+          </button>
+        </div>
+      )}
     </div>
   );
 }
-
 // ── Rooms Tab ──────────────────────────────────────────────
 function RoomsTab({ stations, rooms, onRefresh, adminEmail }: { stations: Station[]; rooms: Room[]; onRefresh: () => void; adminEmail: string }) {
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);

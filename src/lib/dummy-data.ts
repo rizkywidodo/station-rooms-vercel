@@ -23,7 +23,7 @@ export interface Booking {
   roomId: string;
   requesterName: string;
   email: string;
-  origin: string; // "MRT — Divisi X" atau "Mitra — PT Y"
+  origin: string; // "MRT — Departemen X" atau "Mitra — PT Y"
   attendees: number;
   notes: string;
   date: string; // ISO yyyy-mm-dd
