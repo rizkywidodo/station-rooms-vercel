@@ -70,7 +70,7 @@ function AdminLoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="mt-5 w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110 disabled:opacity-60"
+            className="mt-5 w-full rounded-xl bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110 disabled:opacity-60 cursor-pointer"
           >
             {loading ? "Masuk..." : "Masuk"}
           </button>

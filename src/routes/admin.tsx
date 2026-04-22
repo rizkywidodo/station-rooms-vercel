@@ -161,9 +161,9 @@ function AdminPage() {
               key={t.id}
               onClick={() => setTab(t.id)}
               className={cn(
-                "px-4 py-2.5 text-sm font-medium transition border-b-2 -mb-px",
-                tab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
+              "px-4 py-2.5 text-sm font-medium transition border-b-2 -mb-px cursor-pointer",
+              tab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+            )}
             >
               {t.label}
             </button>

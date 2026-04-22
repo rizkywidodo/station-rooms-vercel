@@ -117,8 +117,7 @@ export function SiteHeader() {
                   </div>
                   <button
                     onClick={logout}
-                    className="flex w-full items-center gap-2 rounded-b-xl px-4 py-2.5 text-xs font-medium text-muted-foreground transition hover:text-destructive"
-                  >
+                    className="flex w-full items-center gap-2 rounded-b-xl px-4 py-2.5 text-xs font-medium text-muted-foreground transition hover:text-destructive hover:bg-destructive/5 cursor-pointer"                  >
                     <LogOut className="h-3.5 w-3.5" />
                     Logout
                   </button>
