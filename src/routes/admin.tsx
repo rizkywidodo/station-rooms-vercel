@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/site-header";
 import { STATUS_LABEL, ROOM_TYPE_LABEL, type Booking, type BookingStatus, type Station, type Room, type RoomType } from "@/lib/dummy-data";
 import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs, deleteBooking } from "@/lib/db";import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
+import { getUserProfile } from "@/lib/db";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin Dashboard · MRT Jakarta Booking" }] }),
@@ -29,12 +30,19 @@ function AdminPage() {
   const [stationFilter, setStationFilter] = useState("all");
   const [regionFilter, setRegionFilter] = useState("all");
   const [adminEmail, setAdminEmail] = useState("");
+  const [profile, setProfile] = useState<{ id: string; name: string; role: string; region?: number; station_id?: string } | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) navigate({ to: "/admin-login" });
-      else setAuthed(true);
-      setAdminEmail(data.session?.user?.email ?? "admin");    });
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session) {
+        navigate({ to: "/admin-login" });
+      } else {
+        setAuthed(true);
+        setAdminEmail(data.session.user.email ?? "admin");
+        const p = await getUserProfile(data.session.user.id);
+        setProfile(p);
+      }
+    });
   }, [navigate]);
 
   const fetchAll = async () => {
@@ -48,6 +56,18 @@ function AdminPage() {
   };
 
   useEffect(() => { if (authed) fetchAll(); }, [authed]);
+
+  const allowedStationIds = useMemo(() => {
+    if (!profile) return null;
+    if (profile.role === "planner") return stations.filter((s) => s.region === profile.region).map((s) => s.id);
+    if (profile.role === "area_authority") return [profile.station_id!];
+    return null; // super admin / mitski = akses semua
+  }, [profile, stations]);
+
+  const visibleStations = useMemo(() => {
+    if (!allowedStationIds) return stations;
+    return stations.filter((s) => allowedStationIds.includes(s.id));
+  }, [stations, allowedStationIds]);
 
   const filtered = useMemo(() => {
     return bookings
@@ -74,47 +94,51 @@ function AdminPage() {
           (room?.name.toLowerCase().includes(q) ?? false)
         );
       })
+      .filter((b) => {
+        if (!allowedStationIds) return true;
+        return allowedStationIds.includes(roomMap[b.roomId]?.stationId);
+      })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [bookings, status, stationFilter, regionFilter, search, roomMap, stationMap, stations]);
+  }, [bookings, status, stationFilter, regionFilter, search, roomMap, stationMap, stations, allowedStationIds]);
 
   const counts = useMemo(() => ({
-    pending: bookings.filter((b) => b.status === "pending").length,
-    confirmed: bookings.filter((b) => b.status === "confirmed").length,
-    rejected: bookings.filter((b) => b.status === "rejected").length,
-  }), [bookings]);
+    pending: filtered.filter((b) => b.status === "pending").length,
+    confirmed: filtered.filter((b) => b.status === "confirmed").length,
+    rejected: filtered.filter((b) => b.status === "rejected").length,
+  }), [filtered]);
 
   if (!authed) return null;
 
   const decide = async (b: Booking, decision: BookingStatus, reason?: string) => {
-  await updateBookingStatus(b.id, decision, reason);
-  if (decision === "confirmed") {
-    const conflicts = bookings.filter((other) => {
-      if (other.id === b.id || other.status !== "pending" || other.roomId !== b.roomId || other.date !== b.date) return false;
-      return !(other.endTime <= b.startTime || other.startTime >= b.endTime);
-    });
-    await Promise.all(conflicts.map((c) => updateBookingStatus(c.id, "rejected")));
-  }
-  await addLog(
-    decision === "confirmed" ? "APPROVE_BOOKING" : "REJECT_BOOKING",
-    adminEmail,
-    `Booking #${b.id} - ${stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} · ${roomMap[b.roomId]?.name ?? ""} (${b.requesterName})${reason ? ` — Alasan: ${reason}` : ""}`
-  );
-  await fetchAll();
-};
+    await updateBookingStatus(b.id, decision, reason);
+    if (decision === "confirmed") {
+      const conflicts = bookings.filter((other) => {
+        if (other.id === b.id || other.status !== "pending" || other.roomId !== b.roomId || other.date !== b.date) return false;
+        return !(other.endTime <= b.startTime || other.startTime >= b.endTime);
+      });
+      await Promise.all(conflicts.map((c) => updateBookingStatus(c.id, "rejected")));
+    }
+    await addLog(
+      decision === "confirmed" ? "APPROVE_BOOKING" : "REJECT_BOOKING",
+      profile?.name ?? adminEmail,
+      `Booking #${b.id} - ${stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} · ${roomMap[b.roomId]?.name ?? ""} (${b.requesterName})${reason ? ` — Alasan: ${reason}` : ""}`
+    );
+    await fetchAll();
+  };
 
-const handleDeleteBooking = async (id: number) => {
-  if (!confirm("Hapus booking ini permanen?")) return;
-  await deleteBooking(id);
-  await addLog("DELETE_BOOKING", adminEmail, `Hapus booking #${id}`);
-  await fetchAll();
-};
+  const handleDeleteBooking = async (id: number) => {
+    if (!confirm("Hapus booking ini permanen?")) return;
+    await deleteBooking(id);
+    await addLog("DELETE_BOOKING", profile?.name ?? adminEmail, `Hapus booking #${id}`);
+    await fetchAll();
+  };
 
   const tabs: { id: Tab; label: string }[] = [
-  { id: "bookings", label: `Pengajuan${counts.pending > 0 ? ` (${counts.pending})` : ""}` },
-  { id: "rooms", label: "Ruangan" },
-  { id: "stations", label: "Stasiun" },
-  { id: "logs", label: "Log Aktivitas" },
-];
+    { id: "bookings", label: `Pengajuan${counts.pending > 0 ? ` (${counts.pending})` : ""}` },
+    { id: "rooms", label: "Ruangan" },
+    { id: "stations", label: "Stasiun" },
+    { id: "logs", label: "Log Aktivitas" },
+  ];
 
   return (
     <div className="min-h-screen">
@@ -122,7 +146,9 @@ const handleDeleteBooking = async (id: number) => {
       <section className="mx-auto max-w-7xl px-4 pt-8 sm:px-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Admin Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Kelola booking, ruangan, dan stasiun.</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {profile ? `${profile.name} · ${profile.role === "planner" ? `Planner Region ${profile.region}` : profile.role === "area_authority" ? `Area Authority` : "Super Admin"}` : "Kelola booking, ruangan, dan stasiun."}
+          </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3 mb-8">
           <StatCard label="Menunggu" value={counts.pending} tone="warning" />
@@ -150,7 +176,7 @@ const handleDeleteBooking = async (id: number) => {
         ) : tab === "bookings" ? (
           <BookingsTab
             filtered={filtered}
-            stations={stations}
+            stations={visibleStations}
             stationFilter={stationFilter}
             setStationFilter={setStationFilter}
             regionFilter={regionFilter}
@@ -165,11 +191,11 @@ const handleDeleteBooking = async (id: number) => {
             onDelete={handleDeleteBooking}
           />
         ) : tab === "rooms" ? (
-          <RoomsTab stations={stations} rooms={rooms} onRefresh={fetchAll} adminEmail={adminEmail} />
-       ) : tab === "stations" ? (
-  <StationsTab stations={stations} rooms={rooms} onRefresh={fetchAll} adminEmail={adminEmail} />
+          <RoomsTab stations={visibleStations} rooms={rooms} onRefresh={fetchAll} adminEmail={profile?.name ?? adminEmail} />
+        ) : tab === "stations" ? (
+          <StationsTab stations={visibleStations} rooms={rooms} onRefresh={fetchAll} adminEmail={profile?.name ?? adminEmail} />
         ) : (
-          <LogsTab />
+          <LogsTab allowedStationIds={allowedStationIds} stationMap={stationMap} roomMap={roomMap} />
         )}
       </section>
     </div>
@@ -474,13 +500,27 @@ function StationsTab({ stations, rooms, onRefresh, adminEmail }: { stations: Sta
   );
 }
 
-function LogsTab() {
+function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds: string[] | null; stationMap: Record<string, string>; roomMap: Record<string, { name: string; stationId: string }> }) {
   const [logs, setLogs] = useState<{ id: number; action: string; actor: string; detail: string | null; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getLogs().then((data) => { setLogs(data); setLoading(false); });
+    getLogs().then((data) => {
+      setLogs(data);
+      setLoading(false);
+    });
   }, []);
+
+  const filteredLogs = useMemo(() => {
+    if (!allowedStationIds) return logs;
+    return logs.filter((log) => {
+      if (!log.detail) return false;
+      return allowedStationIds.some((id) => {
+        const stationName = stationMap[id];
+        return log.detail!.toLowerCase().includes(stationName?.toLowerCase() ?? id);
+      });
+    });
+  }, [logs, allowedStationIds, stationMap]);
 
   const actionLabel: Record<string, { label: string; color: string }> = {
     SUBMIT_BOOKING: { label: "Ajukan Booking", color: "bg-primary/15 text-primary" },
@@ -503,18 +543,18 @@ function LogsTab() {
   return (
     <div>
       <div className="mb-5 flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{logs.length} aktivitas tercatat</p>
+        <p className="text-sm text-muted-foreground">{filteredLogs.length} aktivitas tercatat</p>
         <button onClick={() => { setLoading(true); getLogs().then((data) => { setLogs(data); setLoading(false); }); }} className="text-xs text-primary hover:underline">
           Refresh
         </button>
       </div>
       {loading ? (
         <div className="py-10 text-center text-sm text-muted-foreground">Memuat...</div>
-      ) : logs.length === 0 ? (
+      ) : filteredLogs.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Belum ada aktivitas.</div>
       ) : (
         <div className="flex flex-col">
-          {logs.map((log) => {
+          {filteredLogs.map((log) => {
             const info = actionLabel[log.action] ?? { label: log.action, color: "bg-muted text-muted-foreground" };
             return (
               <div key={log.id} className="flex items-start justify-between border-b border-border py-3 gap-4">

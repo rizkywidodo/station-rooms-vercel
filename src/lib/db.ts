@@ -153,3 +153,13 @@ export async function deleteBooking(id: number): Promise<void> {
   const { error } = await supabase.from("bookings").delete().eq("id", id);
   if (error) throw error;
 }
+
+export async function getUserProfile(userId: string): Promise<{ id: string; name: string; role: string; region?: number; station_id?: string } | null> {
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("*")
+    .eq("id", userId)
+    .single();
+  if (error) return null;
+  return data;
+}
