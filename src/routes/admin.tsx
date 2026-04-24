@@ -337,7 +337,6 @@ function RoomsTab({ stations, rooms, onRefresh, adminEmail }: { stations: Statio
                     <select value={newRoom.type} onChange={(e) => setNewRoom((v) => ({ ...v, type: e.target.value as RoomType }))} className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none">
                       <option value="meeting">Meeting Room</option>
                       <option value="office">Station Office</option>
-                      <option value="collaboration">Collaboration Room</option>
                     </select>
                   </div>
                   <div>
@@ -372,7 +371,6 @@ function RoomsTab({ stations, rooms, onRefresh, adminEmail }: { stations: Statio
                               <select value={editingRoom.type} onChange={(e) => setEditingRoom((v) => v ? { ...v, type: e.target.value as RoomType } : v)} className="w-full rounded-xl border border-border bg-muted/60 px-3 py-2 text-sm focus:border-primary focus:outline-none">
                                 <option value="meeting">Meeting Room</option>
                                 <option value="office">Station Office</option>
-                                <option value="collaboration">Collaboration Room</option>
                               </select>
                             </div>
                             <div>

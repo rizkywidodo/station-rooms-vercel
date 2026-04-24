@@ -1,11 +1,12 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, useMemo, type FormEvent } from "react";
 import { ArrowLeft, CheckCircle2, MapPin, Users } from "lucide-react";
 import { z } from "zod";
 import { SiteHeader } from "@/components/site-header";
 import { BookingCalendar } from "@/components/booking-calendar";
-import { getRooms, getStations, addBooking, addLog } from "@/lib/db";
+import { getRooms, getStations, addBooking, addLog, getBookings } from "@/lib/db";
 import { ROOM_TYPE_LABEL, type Room, type Station } from "@/lib/dummy-data";
+
 
 
 const bookingSchema = z.object({
@@ -60,6 +61,40 @@ function BookRoomPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submittedId, setSubmittedId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [bookings, setBookings] = useState<import("@/lib/dummy-data").Booking[]>([]);
+  const [startTime, setStartTime] = useState<string>("");
+
+  useEffect(() => {
+    getBookings().then(setBookings);
+  }, []);
+
+  const bookedSlots = useMemo(() => {
+    if (!date) return [];
+    return bookings
+      .filter((b) => b.roomId === room.id && b.date === date && b.status === "confirmed")
+      .map((b) => ({ start: parseInt(b.startTime), end: parseInt(b.endTime) }));
+  }, [bookings, date, room.id]);
+
+  const isHourBlocked = (hour: number) =>
+    bookedSlots.some((slot) => hour >= slot.start && hour < slot.end);
+
+  const now = new Date();
+  const todayIso = now.toISOString().slice(0, 10);
+  const currentHour = now.getHours();
+
+  const availableStartHours = Array.from({ length: 11 }, (_, i) => i + 8).filter((h) => {
+    if (date === todayIso && h <= currentHour) return false;
+    return !isHourBlocked(h);
+  });
+
+  const availableEndHours = Array.from({ length: 11 }, (_, i) => i + 9).filter((h) => {
+    if (date === todayIso && h <= currentHour) return false;
+    if (!startTime) return true;
+    const selectedStart = parseInt(startTime);
+    if (h <= selectedStart) return false;
+    // block kalau ada slot confirmed di antara startTime dan h
+    return bookedSlots.every((slot) => slot.start >= h || slot.end <= selectedStart);
+  });
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -101,18 +136,18 @@ function BookRoomPage() {
         startTime: d.startTime,
         endTime: d.endTime,
       });
-    setSubmittedId(created.id);
-    await addLog(
-      "SUBMIT_BOOKING",
-      d.email,
-      `Booking #${created.id} - ${station.name} · ${room.name} (${d.date} ${d.startTime}-${d.endTime})`
-    );
+      setSubmittedId(created.id);
+      await addLog(
+        "SUBMIT_BOOKING",
+        d.email,
+        `Booking #${created.id} - ${station.name} · ${room.name} (${d.date} ${d.startTime}-${d.endTime})`
+      );
     } catch (err) {
       setErrors({ submit: "Gagal mengirim booking. Coba lagi." });
     } finally {
       setSubmitting(false);
     }
-    };
+  };
 
   if (submittedId !== null) {
     return (
@@ -127,16 +162,10 @@ function BookRoomPage() {
             Booking <strong className="text-foreground">#{submittedId}</strong> telah dikirim ke admin untuk dikonfirmasi. Status akan diinformasikan via email.
           </p>
           <div className="mt-6 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
-            <button
-              onClick={() => navigate({ to: "/" })}
-              className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110"
-            >
+            <button onClick={() => navigate({ to: "/" })} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110">
               Kembali ke beranda
             </button>
-            <button
-              onClick={() => { setSubmittedId(null); setDate(undefined); }}
-              className="rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-medium transition hover:border-primary/40"
-            >
+            <button onClick={() => { setSubmittedId(null); setDate(undefined); }} className="rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-medium transition hover:border-primary/40">
               Booking lagi
             </button>
           </div>
@@ -145,30 +174,12 @@ function BookRoomPage() {
     );
   }
 
-  const now = new Date();
-  const todayIso = now.toISOString().slice(0, 10);
-  const currentHour = now.getHours();
-
-  const availableStartHours = Array.from({ length: 11 }, (_, i) => i + 8).filter((h) => {
-    if (date === todayIso) return h > currentHour;
-    return true;
-  });
-
-  const availableEndHours = Array.from({ length: 11 }, (_, i) => i + 9).filter((h) => {
-    if (date === todayIso) return h > currentHour;
-    return true;
-  });
-
   return (
     <div className="min-h-screen">
       <SiteHeader />
 
       <section className="mx-auto max-w-6xl px-4 pt-8 sm:px-6">
-        <Link
-          to="/station/$stationId"
-          params={{ stationId: station.id }}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground"
-        >
+        <Link to="/station/$stationId" params={{ stationId: station.id }} className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition hover:text-foreground">
           <ArrowLeft className="h-4 w-4" /> {station.name}
         </Link>
 
@@ -180,12 +191,8 @@ function BookRoomPage() {
               </span>
               <h1 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">{room.name}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5">
-                  <MapPin className="h-3.5 w-3.5" /> Stasiun {station.name}
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Users className="h-3.5 w-3.5" /> Kapasitas {room.capacity} orang
-                </span>
+                <span className="inline-flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5" /> Stasiun {station.name}</span>
+                <span className="inline-flex items-center gap-1.5"><Users className="h-3.5 w-3.5" /> Kapasitas {room.capacity} orang</span>
               </div>
             </div>
           </div>
@@ -202,9 +209,7 @@ function BookRoomPage() {
 
         <form onSubmit={onSubmit} className="rounded-2xl border border-border bg-card p-5 sm:p-6" noValidate>
           <h2 className="text-lg font-semibold">Form Pengajuan</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Lengkapi data berikut. Admin akan memverifikasi dalam 1×24 jam kerja.
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Lengkapi data berikut. Admin akan memverifikasi dalam 1×24 jam kerja.</p>
 
           {errors.submit && (
             <div className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-xs text-destructive">
@@ -231,36 +236,41 @@ function BookRoomPage() {
             </Field>
 
             <Field label="Tanggal" error={errors.date}>
-              <input
-                type="date"
-                value={date ?? ""}
-                onChange={(e) => setDate(e.target.value)}
-                className={inputCls}
-                min={new Date().toISOString().slice(0, 10)}
-              />
+              <input type="date" value={date ?? ""} onChange={(e) => { setDate(e.target.value); setStartTime(""); }} className={inputCls} min={new Date().toISOString().slice(0, 10)} />
             </Field>
             <Field label="Jumlah peserta" error={errors.attendees}>
               <input name="attendees" type="number" min={1} max={200} placeholder="Cth. 8" className={inputCls} />
             </Field>
 
-           <Field label="Jam mulai" error={errors.startTime}>
-            <select name="startTime" className={inputCls} defaultValue="">
+            <Field label="Jam mulai" error={errors.startTime}>
+            <select name="startTime" className={inputCls} value={startTime} onChange={(e) => setStartTime(e.target.value)}>
               <option value="" disabled>Pilih jam mulai</option>
-              {availableStartHours.map((h) => (
-                <option key={h} value={`${String(h).padStart(2, "0")}:00`}>
-                  {String(h).padStart(2, "0")}:00
-                </option>
-              ))}
+              {Array.from({ length: 11 }, (_, i) => i + 8).map((h) => {
+                const timeStr = `${String(h).padStart(2, "0")}:00`;
+                const blocked = isHourBlocked(h) || (date === todayIso && h <= currentHour);
+                return (
+                  <option key={h} value={timeStr} disabled={blocked} style={blocked ? { color: "#ef4444", backgroundColor: "#fef2f2" } : {}}>
+                    {timeStr}{blocked ? " — Reserved" : ""}
+                  </option>
+                );
+              })}
             </select>
           </Field>
           <Field label="Jam selesai" error={errors.endTime}>
             <select name="endTime" className={inputCls} defaultValue="">
               <option value="" disabled>Pilih jam selesai</option>
-              {availableEndHours.map((h) => (
-                <option key={h} value={`${String(h).padStart(2, "0")}:00`}>
-                  {String(h).padStart(2, "0")}:00
-                </option>
-              ))}
+              {Array.from({ length: 11 }, (_, i) => i + 9).map((h) => {
+                const timeStr = `${String(h).padStart(2, "0")}:00`;
+                const selectedStart = parseInt(startTime ?? "0");
+                const blocked = (date === todayIso && h <= currentHour) ||
+                  h <= selectedStart ||
+                  bookedSlots.some((slot) => slot.start >= selectedStart && slot.start < h);
+                return (
+                  <option key={h} value={timeStr} disabled={blocked} style={blocked ? { color: "#ef4444", backgroundColor: "#fef2f2" } : {}}>
+                    {timeStr}{isHourBlocked(h) ? " — Reserved" : ""}
+                  </option>
+                );
+              })}
             </select>
           </Field>
 
@@ -271,11 +281,7 @@ function BookRoomPage() {
             </div>
           </div>
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="mt-6 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-[0_8px_30px_-10px_oklch(0.78_0.16_165/0.5)] transition hover:brightness-110 disabled:opacity-60"
-          >
+          <button type="submit" disabled={submitting} className="mt-6 w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground shadow-[0_8px_30px_-10px_oklch(0.78_0.16_165/0.5)] transition hover:brightness-110 disabled:opacity-60">
             {submitting ? "Mengirim..." : "Ajukan Booking"}
           </button>
         </form>

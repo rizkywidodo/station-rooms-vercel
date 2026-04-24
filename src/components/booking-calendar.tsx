@@ -21,6 +21,7 @@ function isoOf(year: number, monthIdx: number, day: number) {
   return `${year}-${pad(monthIdx + 1)}-${pad(day)}`;
 }
 
+
 export function BookingCalendar({ roomId, selectedDate, onSelectDate }: Props) {
   const today = new Date();
   const [view, setView] = useState({ year: today.getFullYear(), month: today.getMonth() });
@@ -55,12 +56,14 @@ export function BookingCalendar({ roomId, selectedDate, onSelectDate }: Props) {
   const goNext = () => setView((v) => v.month === 11 ? { year: v.year + 1, month: 0 } : { ...v, month: v.month + 1 });
 
   const handleDayClick = (iso: string) => {
-    const hasBooking = !!bookingsByDate[iso]?.length;
-    if (hasBooking) {
-      setPopupDate(popupDate === iso ? null : iso);
-    }
-    onSelectDate?.(iso);
-  };
+  const hasBooking = !!bookingsByDate[iso]?.length;
+  if (hasBooking) {
+    setPopupDate(popupDate === iso ? null : iso);
+  } else {
+    setPopupDate(null);
+  }
+  onSelectDate?.(iso);
+};
 
   const popupBookings = popupDate ? (bookingsByDate[popupDate] ?? []) : [];
 

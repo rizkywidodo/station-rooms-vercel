@@ -138,7 +138,6 @@ function ManagePage() {
                           >
                             <option value="meeting">Meeting Room</option>
                             <option value="office">Station Office</option>
-                            <option value="collaboration">Collaboration Room</option>
                           </select>
                         </div>
                         <div>
@@ -197,7 +196,6 @@ function ManagePage() {
                                     >
                                       <option value="meeting">Meeting Room</option>
                                       <option value="office">Station Office</option>
-                                      <option value="collaboration">Collaboration Room</option>
                                     </select>
                                   </div>
                                   <div>
