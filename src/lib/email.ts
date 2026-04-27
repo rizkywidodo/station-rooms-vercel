@@ -3,16 +3,11 @@ const FROM_EMAIL = "onboarding@resend.dev";
 
 
 async function sendEmail(to: string, subject: string, html: string) {
-  const res = await fetch("/send-email", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: "onboarding@resend.dev",
-      to,
-      subject,
-      html,
-    }),
-  });
+  const res = await fetch("/api/send-email", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ from: FROM_EMAIL, to, subject, html }),
+});
   if (!res.ok) {
     const err = await res.json();
     console.error("Email error:", err);
