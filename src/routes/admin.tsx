@@ -6,6 +6,7 @@ import { STATUS_LABEL, ROOM_TYPE_LABEL, type Booking, type BookingStatus, type S
 import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs, deleteBooking } from "@/lib/db";import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { getUserProfile } from "@/lib/db";
+import { sendBookingCancelled } from "@/lib/email";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin Dashboard · MRT Jakarta Booking" }] }),
@@ -111,18 +112,23 @@ function AdminPage() {
 
   const decide = async (b: Booking, decision: BookingStatus, reason?: string) => {
     await updateBookingStatus(b.id, decision, reason);
-    if (decision === "confirmed") {
-      const conflicts = bookings.filter((other) => {
-        if (other.id === b.id || other.status !== "pending" || other.roomId !== b.roomId || other.date !== b.date) return false;
-        return !(other.endTime <= b.startTime || other.startTime >= b.endTime);
-      });
-      await Promise.all(conflicts.map((c) => updateBookingStatus(c.id, "rejected")));
-    }
     await addLog(
       decision === "confirmed" ? "APPROVE_BOOKING" : "REJECT_BOOKING",
-      profile?.name ?? adminEmail,
+      adminEmail,
       `Booking #${b.id} - ${stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} · ${roomMap[b.roomId]?.name ?? ""} (${b.requesterName})${reason ? ` — Alasan: ${reason}` : ""}`
     );
+    if (decision === "rejected") {
+      await sendBookingCancelled(b.email, {
+        name: b.requesterName,
+        bookingId: b.id,
+        stationName: stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? "",
+        roomName: roomMap[b.roomId]?.name ?? "",
+        date: b.date,
+        startTime: b.startTime,
+        endTime: b.endTime,
+        reason,
+      });
+    }
     await fetchAll();
   };
 
@@ -593,8 +599,8 @@ const statusBadge: Record<BookingStatus, string> = {
 };
 
 function AdminBookingRow({ booking, roomName, stationName, onDecide, onDelete }: { booking: Booking; roomName: string; stationName: string; onDecide: (b: Booking, s: BookingStatus, reason?: string) => void; onDelete: (id: number) => void; }) {
-  const [showRejectDialog, setShowRejectDialog] = useState(false);
-  const [rejectReason, setRejectReason] = useState("");
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4 sm:p-5">
@@ -615,62 +621,58 @@ function AdminBookingRow({ booking, roomName, stationName, onDecide, onDelete }:
             <span className="inline-flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> {booking.email}</span>
           </div>
         </div>
-        {booking.status === "pending" && (
+        {booking.status === "confirmed" && (
           <div className="flex shrink-0 flex-row gap-2 items-center">
             <button
-              onClick={() => onDecide(booking, "confirmed")}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-xs font-semibold text-success transition-all duration-200 hover:bg-success hover:text-white hover:border-success hover:scale-105 cursor-pointer whitespace-nowrap"
-            >
-              <Check className="h-3.5 w-3.5" /> Setujui
-            </button>
-            <button
-              onClick={() => setShowRejectDialog(true)}
+              onClick={() => setShowCancelDialog(true)}
               className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2 text-xs font-semibold text-destructive transition-all duration-200 hover:bg-destructive hover:text-white hover:border-destructive hover:scale-105 cursor-pointer whitespace-nowrap"
             >
-              <X className="h-3.5 w-3.5" /> Tolak
+              <X className="h-3.5 w-3.5" /> Cancel Booking
             </button>
           </div>
         )}
       </div>
-      {booking.notes && (
+
+      {booking.equipment && booking.equipment.length > 0 && (
         <p className="mt-3 w-full rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          <strong className="text-foreground/70">Catatan:</strong> {booking.notes}
+          <strong className="text-foreground/70">Peralatan:</strong>{" "}
+          {booking.equipment.map((e: { item: string; qty: number }) => `${e.item} (${e.qty})`).join(", ")}
         </p>
       )}
       {booking.status === "rejected" && booking.rejectionReason && (
         <p className="mt-3 w-full rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-          <strong>Alasan penolakan:</strong> {booking.rejectionReason}
+          <strong>Alasan pembatalan:</strong> {booking.rejectionReason}
         </p>
       )}
 
       <div className="mt-3 flex justify-end">
-      <button
-        onClick={() => onDelete(booking.id)}
-        className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-destructive/40 hover:text-destructive cursor-pointer transition"
-      >
-        <Trash2 className="h-3 w-3" /> Hapus Booking
-      </button>
-    </div>
+        <button
+          onClick={() => onDelete(booking.id)}
+          className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-destructive/40 hover:text-destructive cursor-pointer transition"
+        >
+          <Trash2 className="h-3 w-3" /> Hapus Booking
+        </button>
+      </div>
 
-      {showRejectDialog && (
+      {showCancelDialog && (
         <div className="mt-3 rounded-xl border border-destructive/20 bg-destructive/5 p-4">
-          <p className="mb-2 text-xs font-semibold text-destructive">Alasan penolakan</p>
+          <p className="mb-2 text-xs font-semibold text-destructive">Alasan pembatalan</p>
           <textarea
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="Cth. Ruangan sudah penuh di jam tersebut..."
+            value={cancelReason}
+            onChange={(e) => setCancelReason(e.target.value)}
+            placeholder="Cth. Ruangan perlu digunakan untuk keperluan mendadak..."
             rows={2}
             className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-destructive focus:outline-none resize-none"
           />
           <div className="mt-2 flex gap-2">
             <button
-              onClick={() => { onDecide(booking, "rejected", rejectReason); setShowRejectDialog(false); setRejectReason(""); }}
+              onClick={() => { onDecide(booking, "rejected", cancelReason); setShowCancelDialog(false); setCancelReason(""); }}
               className="inline-flex items-center gap-1.5 rounded-xl bg-destructive px-4 py-2 text-xs font-semibold text-white hover:brightness-110 cursor-pointer"
             >
-              <X className="h-3.5 w-3.5" /> Konfirmasi Tolak
+              <X className="h-3.5 w-3.5" /> Konfirmasi Cancel
             </button>
             <button
-              onClick={() => { setShowRejectDialog(false); setRejectReason(""); }}
+              onClick={() => { setShowCancelDialog(false); setCancelReason(""); }}
               className="inline-flex items-center gap-1.5 rounded-xl border border-border px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer"
             >
               Batal
@@ -681,4 +683,3 @@ function AdminBookingRow({ booking, roomName, stationName, onDecide, onDelete }:
     </div>
   );
 }
-

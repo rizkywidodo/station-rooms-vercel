@@ -25,13 +25,15 @@ export interface Booking {
   email: string;
   origin: string; // "MRT — Departemen X" atau "Mitra — PT Y"
   attendees: number;
-  notes: string;
+  equipment: { item: string; qty: number }[];
   date: string; // ISO yyyy-mm-dd
   startTime: string; // HH:mm
   endTime: string; // HH:mm
   status: BookingStatus;
   createdAt: string;
   rejectionReason?: string;
+  phone?: string;
+  visitorType?: "internal" | "external";
 }
 
 export const STATIONS: Station[] = [
@@ -79,74 +81,36 @@ const offset = (n: number) => {
 
 const seedBookings: Booking[] = [
   {
-    id: 19,
+    id: 1,
     roomId: "hi-meeting",
     requesterName: "Arvin",
     email: "arvin@mrtjakarta.co.id",
     origin: "MRT — TCM",
     attendees: 8,
-    notes: "Butuh kabel roll tambahan",
+    equipment: [{ item: "Proyektor", qty: 1 }, { item: "Kabel Roll", qty: 2 }],
     date: offset(2),
     startTime: "14:00",
     endTime: "17:00",
     status: "confirmed",
     createdAt: new Date().toISOString(),
+    phone: "08123456789",
+    visitorType: "internal",
   },
   {
-    id: 18,
+    id: 2,
     roomId: "hi-collab",
     requesterName: "PT VMI",
     email: "pic@vmi.co.id",
     origin: "Mitra — PT VMI",
     attendees: 12,
-    notes: "Proyektor & flipchart",
+    equipment: [{ item: "Proyektor", qty: 1 }, { item: "Layar Proyektor", qty: 1 }],
     date: offset(1),
     startTime: "14:00",
     endTime: "15:30",
     status: "confirmed",
     createdAt: new Date().toISOString(),
-  },
-  {
-    id: 17,
-    roomId: "blok-m-meeting",
-    requesterName: "Quality Team",
-    email: "quality@mrtjakarta.co.id",
-    origin: "MRT — Quality",
-    attendees: 6,
-    notes: "Rapat audit harian",
-    date: offset(0),
-    startTime: "08:00",
-    endTime: "17:00",
-    status: "confirmed",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 16,
-    roomId: "hi-office",
-    requesterName: "Budi",
-    email: "budi@mrtjakarta.co.id",
-    origin: "MRT — Operasi",
-    attendees: 4,
-    notes: "",
-    date: offset(3),
-    startTime: "09:00",
-    endTime: "11:00",
-    status: "pending",
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: 15,
-    roomId: "haji-nawi-meeting",
-    requesterName: "Sari",
-    email: "sari@mitra.co.id",
-    origin: "Mitra — PT ABC",
-    attendees: 5,
-    notes: "Brief vendor",
-    date: offset(4),
-    startTime: "13:00",
-    endTime: "15:00",
-    status: "pending",
-    createdAt: new Date().toISOString(),
+    phone: "08987654321",
+    visitorType: "external",
   },
 ];
 

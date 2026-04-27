@@ -52,16 +52,19 @@ export async function addBooking(
   const { data, error } = await supabase
     .from("bookings")
     .insert({
-      room_id: input.roomId,
-      requester_name: input.requesterName,
-      email: input.email,
-      origin: input.origin,
-      attendees: input.attendees,
-      notes: input.notes,
-      date: input.date,
-      start_time: input.startTime,
-      end_time: input.endTime,
-    })
+    room_id: input.roomId,
+    requester_name: input.requesterName,
+    email: input.email,
+    origin: input.origin,
+    attendees: input.attendees,
+    equipment: input.equipment ?? [],
+    date: input.date,
+    start_time: input.startTime,
+    end_time: input.endTime,
+    phone: input.phone ?? null,
+    visitor_type: input.visitorType ?? "internal",
+    status: "confirmed",
+  })
     .select()
     .single();
   if (error) throw error;
@@ -139,13 +142,15 @@ function dbToBooking(r: any): Booking {
     email: r.email,
     origin: r.origin,
     attendees: r.attendees,
-    notes: r.notes ?? "",
     date: r.date,
     startTime: r.start_time,
     endTime: r.end_time,
     status: r.status as BookingStatus,
     createdAt: r.created_at,
     rejectionReason: r.rejection_reason ?? undefined,
+    phone: r.phone ?? undefined,
+    visitorType: r.visitor_type ?? "internal",
+    equipment: r.equipment ?? [],
   };
 }
 
