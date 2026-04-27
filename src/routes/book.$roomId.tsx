@@ -164,7 +164,7 @@ function BookRoomPage() {
         d.email,
         `Booking #${created.id} - ${station.name} · ${room.name} (${d.date} ${d.startTime}-${d.endTime})`
       );
-      await sendBookingConfirmation(d.email, {
+       sendBookingConfirmation(d.email, {
         name: d.requesterName,
         bookingId: created.id,
         stationName: station.name,
