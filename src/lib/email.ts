@@ -1,10 +1,12 @@
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 async function sendEmail(to: string, subject: string, html: string) {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
     },
     body: JSON.stringify({ to, subject, html }),
   });
@@ -13,7 +15,6 @@ async function sendEmail(to: string, subject: string, html: string) {
     console.error("Email error:", err);
   }
 }
-
 export async function sendBookingConfirmation(to: string, data: {
   name: string;
   bookingId: number;
