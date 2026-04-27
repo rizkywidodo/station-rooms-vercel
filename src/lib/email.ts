@@ -1,6 +1,7 @@
 const RESEND_API_KEY = import.meta.env.VITE_RESEND_API_KEY;
 const FROM_EMAIL = "onboarding@resend.dev";
 
+
 async function sendEmail(to: string, subject: string, html: string) {
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -139,3 +140,4 @@ export async function sendBookingCancelled(to: string, data: {
     `
   );
 }
+console.log("RESEND KEY:", RESEND_API_KEY ? "ada" : "KOSONG");
