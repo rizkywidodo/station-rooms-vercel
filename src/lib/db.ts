@@ -164,7 +164,7 @@ export async function getUserProfile(userId: string): Promise<{ id: string; name
     .from("user_profiles")
     .select("*")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
   if (error) return null;
   return data;
 }
