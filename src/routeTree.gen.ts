@@ -15,6 +15,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as StationStationIdRouteImport } from './routes/station.$stationId'
 import { Route as BookRoomIdRouteImport } from './routes/book.$roomId'
+import { Route as ApiSendEmailRouteImport } from './routes/api/send-email'
 import { Route as AdminManageRouteImport } from './routes/admin/manage'
 
 const StationsRoute = StationsRouteImport.update({
@@ -47,6 +48,11 @@ const BookRoomIdRoute = BookRoomIdRouteImport.update({
   path: '/book/$roomId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSendEmailRoute = ApiSendEmailRouteImport.update({
+  id: '/api/send-email',
+  path: '/api/send-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminManageRoute = AdminManageRouteImport.update({
   id: '/manage',
   path: '/manage',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/admin-login': typeof AdminLoginRoute
   '/stations': typeof StationsRoute
   '/admin/manage': typeof AdminManageRoute
+  '/api/send-email': typeof ApiSendEmailRoute
   '/book/$roomId': typeof BookRoomIdRoute
   '/station/$stationId': typeof StationStationIdRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/admin-login': typeof AdminLoginRoute
   '/stations': typeof StationsRoute
   '/admin/manage': typeof AdminManageRoute
+  '/api/send-email': typeof ApiSendEmailRoute
   '/book/$roomId': typeof BookRoomIdRoute
   '/station/$stationId': typeof StationStationIdRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/admin-login': typeof AdminLoginRoute
   '/stations': typeof StationsRoute
   '/admin/manage': typeof AdminManageRoute
+  '/api/send-email': typeof ApiSendEmailRoute
   '/book/$roomId': typeof BookRoomIdRoute
   '/station/$stationId': typeof StationStationIdRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/admin-login'
     | '/stations'
     | '/admin/manage'
+    | '/api/send-email'
     | '/book/$roomId'
     | '/station/$stationId'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/admin-login'
     | '/stations'
     | '/admin/manage'
+    | '/api/send-email'
     | '/book/$roomId'
     | '/station/$stationId'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/admin-login'
     | '/stations'
     | '/admin/manage'
+    | '/api/send-email'
     | '/book/$roomId'
     | '/station/$stationId'
   fileRoutesById: FileRoutesById
@@ -116,6 +128,7 @@ export interface RootRouteChildren {
   AdminRoute: typeof AdminRouteWithChildren
   AdminLoginRoute: typeof AdminLoginRoute
   StationsRoute: typeof StationsRoute
+  ApiSendEmailRoute: typeof ApiSendEmailRoute
   BookRoomIdRoute: typeof BookRoomIdRoute
   StationStationIdRoute: typeof StationStationIdRoute
 }
@@ -164,6 +177,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BookRoomIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/send-email': {
+      id: '/api/send-email'
+      path: '/api/send-email'
+      fullPath: '/api/send-email'
+      preLoaderRoute: typeof ApiSendEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/manage': {
       id: '/admin/manage'
       path: '/manage'
@@ -189,6 +209,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRoute: AdminRouteWithChildren,
   AdminLoginRoute: AdminLoginRoute,
   StationsRoute: StationsRoute,
+  ApiSendEmailRoute: ApiSendEmailRoute,
   BookRoomIdRoute: BookRoomIdRoute,
   StationStationIdRoute: StationStationIdRoute,
 }
