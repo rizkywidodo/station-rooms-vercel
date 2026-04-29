@@ -1,4 +1,3 @@
-import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,28 +11,26 @@ Deno.serve(async (req) => {
 
   try {
     const { to, subject, html } = await req.json();
+    const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY")!;
     const GMAIL_USER = Deno.env.get("GMAIL_USER")!;
-    const GMAIL_APP_PASSWORD = Deno.env.get("GMAIL_APP_PASSWORD")!;
 
-    const client = new SmtpClient();
-    await client.connectTLS({
-      hostname: "smtp.gmail.com",
-      port: 465,
-      username: GMAIL_USER,
-      password: GMAIL_APP_PASSWORD,
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "api-key": BREVO_API_KEY,
+      },
+      body: JSON.stringify({
+        sender: { name: "MRT Jakarta", email: GMAIL_USER },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+      }),
     });
 
-    await client.send({
-      from: `MRT Jakarta <${GMAIL_USER}>`,
-      to,
-      subject,
-      html,
-    });
-
-    await client.close();
-
-    return new Response(JSON.stringify({ success: true }), {
-      status: 200,
+    const data = await res.json();
+    return new Response(JSON.stringify(data), {
+      status: res.status,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
