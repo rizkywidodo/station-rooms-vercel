@@ -6,7 +6,7 @@ import { SiteHeader } from "@/components/site-header";
 import { BookingCalendar } from "@/components/booking-calendar";
 import { getRooms, getStations, addBooking, addLog, getBookings } from "@/lib/db";
 import { ROOM_TYPE_LABEL, type Room, type Station } from "@/lib/dummy-data";
-import { sendBookingConfirmation } from "@/lib/email";
+import { sendBookingConfirmation, sendBookingNotifToStation, getStationEmail } from "@/lib/email";
 
 const EQUIPMENT_LIST = [
   "Proyektor",
@@ -173,6 +173,26 @@ function BookRoomPage() {
         startTime: d.startTime,
         endTime: d.endTime,
       });
+
+      const stationEmail = getStationEmail(station.id);
+      console.log("Station ID:", station.id, "Station Email:", stationEmail);
+      if (stationEmail) {
+        sendBookingNotifToStation(stationEmail, {
+          bookingId: created.id,
+          requesterName: d.requesterName,
+          origin: d.originType === "mrt" ? `MRT — ${d.originDetail}` : `Mitra — ${d.originDetail}`,
+          stationName: station.name,
+          roomName: room.name,
+          date: d.date,
+          startTime: d.startTime,
+          endTime: d.endTime,
+          attendees: d.attendees,
+          phone: d.phone,
+          visitorType: d.visitorType,
+          equipment: equipmentList,
+        });
+      }
+
       } catch (err) {
       setErrors({ submit: "Gagal mengirim booking. Coba lagi." });
     } finally {

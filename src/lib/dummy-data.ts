@@ -34,6 +34,7 @@ export interface Booking {
   rejectionReason?: string;
   phone?: string;
   visitorType?: "internal" | "external";
+  attended?: boolean;
 }
 
 export const STATIONS: Station[] = [

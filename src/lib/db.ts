@@ -151,6 +151,7 @@ function dbToBooking(r: any): Booking {
     phone: r.phone ?? undefined,
     visitorType: r.visitor_type ?? "internal",
     equipment: r.equipment ?? [],
+    attended: r.attended ?? false,
   };
 }
 
@@ -167,4 +168,12 @@ export async function getUserProfile(userId: string): Promise<{ id: string; name
     .maybeSingle();
   if (error) return null;
   return data;
+}
+
+export async function markAttended(id: number): Promise<void> {
+  const { error } = await supabase
+    .from("bookings")
+    .update({ attended: true })
+    .eq("id", id);
+  if (error) throw error;
 }

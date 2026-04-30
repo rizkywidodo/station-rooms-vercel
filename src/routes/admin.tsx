@@ -3,10 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Calendar, Check, Clock, Mail, Search, Users, X, Plus, Pencil, Trash2 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { STATUS_LABEL, ROOM_TYPE_LABEL, type Booking, type BookingStatus, type Station, type Room, type RoomType } from "@/lib/dummy-data";
-import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs, deleteBooking } from "@/lib/db";import { cn } from "@/lib/utils";
-import { supabase } from "@/lib/supabase";
+import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs, deleteBooking, markAttended } from "@/lib/db";import { supabase } from "@/lib/supabase";
 import { getUserProfile } from "@/lib/db";
 import { sendBookingCancelled } from "@/lib/email";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin Dashboard · MRT Jakarta Booking" }] }),
@@ -32,6 +32,11 @@ function AdminPage() {
   const [regionFilter, setRegionFilter] = useState("all");
   const [adminEmail, setAdminEmail] = useState("");
   const [profile, setProfile] = useState<{ id: string; name: string; role: string; region?: number; station_id?: string } | null>(null);
+  const handleAttended = async (id: number) => {
+  await markAttended(id);
+  await addLog("ATTENDED", adminEmail, `Booking #${id} dikonfirmasi hadir`);
+  await fetchAll();
+};
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -111,14 +116,15 @@ function AdminPage() {
   if (!authed) return null;
 
   const decide = async (b: Booking, decision: BookingStatus, reason?: string) => {
-    await updateBookingStatus(b.id, decision, reason);
-    await addLog(
-      decision === "confirmed" ? "APPROVE_BOOKING" : "REJECT_BOOKING",
-      adminEmail,
-      `Booking #${b.id} - ${stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} · ${roomMap[b.roomId]?.name ?? ""} (${b.requesterName})${reason ? ` — Alasan: ${reason}` : ""}`
-    );
-    if (decision === "rejected") {
-      await sendBookingCancelled(b.email, {
+  await updateBookingStatus(b.id, decision, reason);
+  await addLog(
+    decision === "confirmed" ? "APPROVE_BOOKING" : "REJECT_BOOKING",
+    adminEmail,
+    `Booking #${b.id} - ${stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} · ${roomMap[b.roomId]?.name ?? ""} (${b.requesterName})${reason ? ` — Alasan: ${reason}` : ""}`
+  );
+  if (decision === "rejected") {
+    try {
+      sendBookingCancelled(b.email, {
         name: b.requesterName,
         bookingId: b.id,
         stationName: stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? "",
@@ -128,9 +134,12 @@ function AdminPage() {
         endTime: b.endTime,
         reason,
       });
+    } catch (e) {
+      console.error("Email error:", e);
     }
-    await fetchAll();
-  };
+  }
+  await fetchAll();
+};
 
   const handleDeleteBooking = async (id: number) => {
     if (!confirm("Hapus booking ini permanen?")) return;
@@ -195,6 +204,7 @@ function AdminPage() {
             stationMap={stationMap}
             onDecide={decide}
             onDelete={handleDeleteBooking}
+            onAttended={handleAttended}
           />
         ) : tab === "rooms" ? (
           <RoomsTab stations={visibleStations} rooms={rooms} onRefresh={fetchAll} adminEmail={profile?.name ?? adminEmail} />
@@ -208,7 +218,7 @@ function AdminPage() {
   );
 }
 
-function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regionFilter, setRegionFilter, status, setStatus, search, setSearch, roomMap, stationMap, onDecide, onDelete }: any) {
+function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regionFilter, setRegionFilter, status, setStatus, search, setSearch, roomMap, stationMap, onDecide, onDelete, onAttended }: any) {
   const [page, setPage] = useState(1);
   const PER_PAGE = 6;
   const totalPages = Math.ceil(filtered.length / PER_PAGE);
@@ -251,7 +261,7 @@ function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regi
           <div className="col-span-2 rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Tidak ada pengajuan.</div>
         ) : (
           paginated.map((b: Booking) => (
-            <AdminBookingRow key={b.id} booking={b} roomName={roomMap[b.roomId]?.name ?? b.roomId} stationName={stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} onDecide={onDecide} onDelete={onDelete} />
+            <AdminBookingRow key={b.id} booking={b} roomName={roomMap[b.roomId]?.name ?? b.roomId} stationName={stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} onDecide={onDecide} onDelete={onDelete} onAttended={onAttended} />
           ))
         )}
       </div>
@@ -598,8 +608,7 @@ const statusBadge: Record<BookingStatus, string> = {
   rejected: "bg-destructive/15 text-destructive",
 };
 
-function AdminBookingRow({ booking, roomName, stationName, onDecide, onDelete }: { booking: Booking; roomName: string; stationName: string; onDecide: (b: Booking, s: BookingStatus, reason?: string) => void; onDelete: (id: number) => void; }) {
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
+function AdminBookingRow({ booking, roomName, stationName, onDecide, onDelete, onAttended }: { booking: Booking; roomName: string; stationName: string; onDecide: (b: Booking, s: BookingStatus, reason?: string) => void; onDelete: (id: number) => void; onAttended: (id: number) => void; }) {  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
 
   return (
@@ -621,15 +630,28 @@ function AdminBookingRow({ booking, roomName, stationName, onDecide, onDelete }:
             <span className="inline-flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> {booking.email}</span>
           </div>
         </div>
-        {booking.status === "confirmed" && (
+          {booking.status === "confirmed" && !booking.attended && (
           <div className="flex shrink-0 flex-row gap-2 items-center">
+            {(booking.attended === false || booking.attended === null || booking.attended === undefined) && (
+              <button
+                onClick={() => onAttended(booking.id)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-xs font-semibold text-success transition-all duration-200 hover:bg-success hover:text-white hover:border-success hover:scale-105 cursor-pointer whitespace-nowrap"
+              >
+                <Check className="h-3.5 w-3.5" /> Hadir
+              </button>
+            )}
             <button
               onClick={() => setShowCancelDialog(true)}
               className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2 text-xs font-semibold text-destructive transition-all duration-200 hover:bg-destructive hover:text-white hover:border-destructive hover:scale-105 cursor-pointer whitespace-nowrap"
             >
-              <X className="h-3.5 w-3.5" /> Cancel Booking
+              <X className="h-3.5 w-3.5" /> Cancel
             </button>
           </div>
+        )}
+        {booking.status === "confirmed" && booking.attended && (
+          <span className="inline-flex items-center gap-1.5 rounded-xl bg-success/10 px-4 py-2 text-xs font-semibold text-success whitespace-nowrap">
+            ✓ Digunakan
+          </span>
         )}
       </div>
 

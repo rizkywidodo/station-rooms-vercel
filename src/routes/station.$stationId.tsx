@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/site-header";
 import { ROOM_TYPE_LABEL, type Room, type Station } from "@/lib/dummy-data";
 import { getRooms, getStations } from "@/lib/db";
 
+
 export const Route = createFileRoute("/station/$stationId")({
   ssr: false,
   loader: async ({ params }): Promise<{ station: Station; rooms: Room[] }> => {
