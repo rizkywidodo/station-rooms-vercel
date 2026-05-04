@@ -220,16 +220,23 @@ function AdminPage() {
 
 function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regionFilter, setRegionFilter, status, setStatus, search, setSearch, roomMap, stationMap, onDecide, onDelete, onAttended }: any) {
   const [page, setPage] = useState(1);
+  const [monthFilter, setMonthFilter] = useState("all");
   const PER_PAGE = 6;
-  const totalPages = Math.ceil(filtered.length / PER_PAGE);
-  const paginated = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-  useEffect(() => { setPage(1); }, [filtered]);
+  useEffect(() => { setPage(1); }, [filtered, monthFilter]);
 
   const filteredStations = useMemo(() => {
     if (regionFilter === "all") return stations;
     return stations.filter((s: Station) => String(s.region) === regionFilter);
   }, [stations, regionFilter]);
+
+  const monthFiltered = useMemo(() => {
+    if (monthFilter === "all") return filtered;
+    return filtered.filter((b: Booking) => b.date.slice(0, 7) === monthFilter);
+  }, [filtered, monthFilter]);
+
+  const totalPages = Math.ceil(monthFiltered.length / PER_PAGE);
+  const paginated = monthFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
     <div>
@@ -254,10 +261,24 @@ function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regi
           <option value="confirmed">Terkonfirmasi</option>
           <option value="rejected">Ditolak</option>
         </select>
+        <select
+          value={monthFilter}
+          onChange={(e) => setMonthFilter(e.target.value)}
+          className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        >
+          <option value="all">Semua Bulan</option>
+          {Array.from({ length: 12 }, (_, i) => {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+            const label = d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+            return <option key={val} value={val}>{label}</option>;
+          })}
+        </select>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        {filtered.length === 0 ? (
+        {monthFiltered.length === 0 ? (
           <div className="col-span-2 rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Tidak ada pengajuan.</div>
         ) : (
           paginated.map((b: Booking) => (
@@ -267,14 +288,17 @@ function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regi
       </div>
 
       {totalPages > 1 && (
-        <div className="mt-6 flex items-center justify-center gap-2">
-          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">
-            ← Prev
-          </button>
-          <span className="text-sm text-muted-foreground">{page} / {totalPages}</span>
-          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">
-            Next →
-          </button>
+        <div className="mt-6 flex items-center justify-center gap-1 flex-wrap">
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">←</button>
+          {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+            const p = i + 1;
+            return (
+              <button key={p} onClick={() => setPage(p)} className={cn("rounded-xl border px-3 py-2 text-sm cursor-pointer transition", page === p ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary")}>
+                {p}
+              </button>
+            );
+          })}
+          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">→</button>
         </div>
       )}
     </div>
@@ -517,24 +541,40 @@ function StationsTab({ stations, rooms, onRefresh, adminEmail }: { stations: Sta
 function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds: string[] | null; stationMap: Record<string, string>; roomMap: Record<string, { name: string; stationId: string }> }) {
   const [logs, setLogs] = useState<{ id: number; action: string; actor: string; detail: string | null; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [monthFilter, setMonthFilter] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const PER_PAGE = 20;
 
-  useEffect(() => {
-    getLogs().then((data) => {
-      setLogs(data);
-      setLoading(false);
-    });
-  }, []);
+  const fetchLogs = async (p: number) => {
+    setLoading(true);
+    const offset = (p - 1) * PER_PAGE;
+    const [data, count] = await Promise.all([getLogs(PER_PAGE, offset), getLogsCount()]);
+    setLogs(data);
+    setTotalCount(count);
+    setLoading(false);
+  };
+
+  useEffect(() => { fetchLogs(page); }, [page]);
+  useEffect(() => { setPage(1); fetchLogs(1); }, [monthFilter]);
 
   const filteredLogs = useMemo(() => {
-    if (!allowedStationIds) return logs;
     return logs.filter((log) => {
+      const logMonth = log.created_at.slice(0, 7);
+      if (logMonth !== monthFilter) return false;
+      if (!allowedStationIds) return true;
       if (!log.detail) return false;
       return allowedStationIds.some((id) => {
         const stationName = stationMap[id];
         return log.detail!.toLowerCase().includes(stationName?.toLowerCase() ?? id);
       });
     });
-  }, [logs, allowedStationIds, stationMap]);
+  }, [logs, monthFilter, allowedStationIds, stationMap]);
+
+  const totalPages = Math.ceil(totalCount / PER_PAGE);
 
   const actionLabel: Record<string, { label: string; color: string }> = {
     SUBMIT_BOOKING: { label: "Ajukan Booking", color: "bg-primary/15 text-primary" },
@@ -546,6 +586,7 @@ function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds
     ADD_STATION: { label: "Tambah Stasiun", color: "bg-accent/15 text-accent" },
     DELETE_STATION: { label: "Hapus Stasiun", color: "bg-destructive/15 text-destructive" },
     DELETE_BOOKING: { label: "Hapus Booking", color: "bg-destructive/15 text-destructive" },
+    ATTENDED: { label: "Konfirmasi Hadir", color: "bg-success/15 text-success" },
   };
 
   const formatDate = (iso: string) => {
@@ -554,18 +595,42 @@ function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds
       " · " + d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
   };
 
+  // Generate last 12 months options
+  const monthOptions = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const label = d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+    return { val, label };
+  });
+
   return (
     <div>
-      <div className="mb-5 flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">{filteredLogs.length} aktivitas tercatat</p>
-        <button onClick={() => { setLoading(true); getLogs().then((data) => { setLogs(data); setLoading(false); }); }} className="text-xs text-primary hover:underline">
+      <div className="mb-5 flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <select
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+            className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            {monthOptions.map((m) => (
+              <option key={m.val} value={m.val}>{m.label}</option>
+            ))}
+          </select>
+          <p className="text-sm text-muted-foreground">{filteredLogs.length} aktivitas</p>
+        </div>
+        <button
+          onClick={() => fetchLogs(page)}
+          className="text-xs text-primary hover:underline"
+        >
           Refresh
         </button>
       </div>
+
       {loading ? (
         <div className="py-10 text-center text-sm text-muted-foreground">Memuat...</div>
       ) : filteredLogs.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Belum ada aktivitas.</div>
+        <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Belum ada aktivitas bulan ini.</div>
       ) : (
         <div className="flex flex-col">
           {filteredLogs.map((log) => {
@@ -585,6 +650,32 @@ function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds
               </div>
             );
           })}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-center gap-1 flex-wrap">
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">
+            ←
+          </button>
+          {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+            const p = i + 1;
+            return (
+              <button
+                key={p}
+                onClick={() => setPage(p)}
+                className={cn(
+                  "rounded-xl border px-3 py-2 text-sm cursor-pointer transition",
+                  page === p ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"
+                )}
+              >
+                {p}
+              </button>
+            );
+          })}
+          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">
+            →
+          </button>
         </div>
       )}
     </div>

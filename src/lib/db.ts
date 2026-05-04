@@ -123,14 +123,22 @@ export async function addLog(action: string, actor: string, detail?: string): Pr
   await supabase.from("activity_logs").insert({ action, actor, detail });
 }
 
-export async function getLogs(): Promise<{ id: number; action: string; actor: string; detail: string | null; created_at: string }[]> {
+export async function getLogs(limit = 50, offset = 0): Promise<{ id: number; action: string; actor: string; detail: string | null; created_at: string }[]> {
   const { data, error } = await supabase
     .from("activity_logs")
     .select("*")
     .order("created_at", { ascending: false })
-    .limit(200);
+    .range(offset, offset + limit - 1);
   if (error) throw error;
   return data;
+}
+
+export async function getLogsCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from("activity_logs")
+    .select("*", { count: "exact", head: true });
+  if (error) return 0;
+  return count ?? 0;
 }
 
 // Helper
