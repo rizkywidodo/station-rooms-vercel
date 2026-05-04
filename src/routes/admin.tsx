@@ -221,13 +221,12 @@ function AdminPage() {
 function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regionFilter, setRegionFilter, status, setStatus, search, setSearch, roomMap, stationMap, onDecide, onDelete, onAttended }: any) {
   const now = new Date();
   const [page, setPage] = useState(1);
-  const [yearFilter, setYearFilter] = useState(now.getFullYear());
-  const [monthFilter, setMonthFilter] = useState(now.getMonth() + 1);
+  const [yearFilter, setYearFilter] = useState(0);
+  const [monthFilter, setMonthFilter] = useState(0);
   const [availableYears, setAvailableYears] = useState<number[]>([now.getFullYear()]);
   const PER_PAGE = 6;
 
   useEffect(() => {
-    // get unique years from filtered bookings
     const years = [...new Set(filtered.map((b: Booking) => new Date(b.date).getFullYear()))] as number[];
     if (years.length > 0) setAvailableYears(years.sort((a: number, b: number) => b - a));
   }, [filtered]);
@@ -240,15 +239,17 @@ function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regi
   }, [stations, regionFilter]);
 
   const monthFiltered = useMemo(() => {
+    if (yearFilter === 0 && monthFilter === 0) return filtered;
     return filtered.filter((b: Booking) => {
       const d = new Date(b.date);
-      return d.getFullYear() === yearFilter && d.getMonth() + 1 === monthFilter;
+      if (yearFilter > 0 && d.getFullYear() !== yearFilter) return false;
+      if (monthFilter > 0 && d.getMonth() + 1 !== monthFilter) return false;
+      return true;
     });
   }, [filtered, yearFilter, monthFilter]);
 
   const totalPages = Math.ceil(monthFiltered.length / PER_PAGE);
   const paginated = monthFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
-
   const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
   return (
@@ -274,28 +275,33 @@ function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regi
           <option value="confirmed">Terkonfirmasi</option>
           <option value="rejected">Ditolak</option>
         </select>
-        <div className="flex items-center gap-1 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
-          <select
-            value={yearFilter}
-            onChange={(e) => setYearFilter(Number(e.target.value))}
-            className="text-sm font-medium text-primary focus:outline-none bg-transparent cursor-pointer"
-          >
-            {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <span className="text-primary/50 text-xs">·</span>
-          <select
-            value={monthFilter}
-            onChange={(e) => setMonthFilter(Number(e.target.value))}
-            className="text-sm font-medium text-primary focus:outline-none bg-transparent cursor-pointer"
-          >
-            {monthNames.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
-          </select>
-        </div>
+        <select
+          value={yearFilter}
+          onChange={(e) => setYearFilter(Number(e.target.value))}
+          className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none cursor-pointer"
+        >
+          <option value={0}>Semua Tahun</option>
+          {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select
+          value={monthFilter}
+          onChange={(e) => setMonthFilter(Number(e.target.value))}
+          className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none cursor-pointer"
+        >
+          <option value={0}>Semua Bulan</option>
+          {monthNames.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+        </select>
+        <button
+          onClick={() => { setYearFilter(now.getFullYear()); setMonthFilter(now.getMonth() + 1); setPage(1); }}
+          className="text-xs text-muted-foreground hover:text-primary border border-border rounded-xl px-3 py-2 transition hover:border-primary/40 cursor-pointer"
+        >
+          Reset
+        </button>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         {monthFiltered.length === 0 ? (
-          <div className="col-span-2 rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Tidak ada pengajuan bulan ini.</div>
+          <div className="col-span-2 rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Tidak ada pengajuan.</div>
         ) : (
           paginated.map((b: Booking) => (
             <AdminBookingRow key={b.id} booking={b} roomName={roomMap[b.roomId]?.name ?? b.roomId} stationName={stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} onDecide={onDecide} onDelete={onDelete} onAttended={onAttended} />
@@ -320,6 +326,7 @@ function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regi
     </div>
   );
 }
+
 // ── Rooms Tab ──────────────────────────────────────────────
 function RoomsTab({ stations, rooms, onRefresh, adminEmail }: { stations: Station[]; rooms: Room[]; onRefresh: () => void; adminEmail: string }) {
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
@@ -555,23 +562,22 @@ function StationsTab({ stations, rooms, onRefresh, adminEmail }: { stations: Sta
 }
 
 function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds: string[] | null; stationMap: Record<string, string>; roomMap: Record<string, { name: string; stationId: string }> }) {
- const now = new Date();
+  const now = new Date();
   const [yearFilter, setYearFilter] = useState(now.getFullYear());
   const [monthFilter, setMonthFilter] = useState(now.getMonth() + 1);
   const [availableYears, setAvailableYears] = useState<number[]>([now.getFullYear()]);
-
   const [logs, setLogs] = useState<{ id: number; action: string; actor: string; detail: string | null; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const PER_PAGE = 20;
 
-useEffect(() => {
-  getLogs(1000, 0).then((data) => {
-    const years = [...new Set(data.map((d) => new Date(d.created_at).getFullYear()))] as number[];
-    if (years.length > 0) setAvailableYears(years.sort((a, b) => b - a));
-  });
-}, []);
+  useEffect(() => {
+    getLogs(1000, 0).then((data) => {
+      const years = [...new Set(data.map((d) => new Date(d.created_at).getFullYear()))] as number[];
+      if (years.length > 0) setAvailableYears(years.sort((a, b) => b - a));
+    });
+  }, []);
 
   const fetchLogs = async (p: number, y: number, m: number) => {
     setLoading(true);
@@ -598,6 +604,8 @@ useEffect(() => {
 
   const totalPages = Math.ceil(totalCount / PER_PAGE);
 
+  const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
   const actionLabel: Record<string, { label: string; color: string }> = {
     SUBMIT_BOOKING: { label: "Ajukan Booking", color: "bg-primary/15 text-primary" },
     APPROVE_BOOKING: { label: "Setujui Booking", color: "bg-success/15 text-success" },
@@ -617,81 +625,87 @@ useEffect(() => {
       " · " + d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
   };
 
-  const yearOptions = Array.from({ length: 3 }, (_, i) => now.getFullYear() - i);
-  const monthOptions = [
-    { val: 1, label: "Januari" }, { val: 2, label: "Februari" }, { val: 3, label: "Maret" },
-    { val: 4, label: "April" }, { val: 5, label: "Mei" }, { val: 6, label: "Juni" },
-    { val: 7, label: "Juli" }, { val: 8, label: "Agustus" }, { val: 9, label: "September" },
-    { val: 10, label: "Oktober" }, { val: 11, label: "November" }, { val: 12, label: "Desember" },
-  ];
+  const handleReset = () => {
+  setYearFilter(now.getFullYear());
+  setMonthFilter(now.getMonth() + 1);
+  setPage(1);
+};
 
   return (
-    <div>
-      <div className="mb-5 flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <select
-            value={yearFilter}
-            onChange={(e) => setYearFilter(Number(e.target.value))}
-            className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          >
-            {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-          <select
-            value={monthFilter}
-            onChange={(e) => setMonthFilter(Number(e.target.value))}
-            className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
-          >
-            {monthOptions.map((m) => <option key={m.val} value={m.val}>{m.label}</option>)}
-          </select>
-          <p className="text-sm text-muted-foreground">{totalCount} aktivitas</p>
-        </div>
-        <button onClick={() => fetchLogs(page, yearFilter, monthFilter)} className="text-xs text-primary hover:underline">
-          Refresh
+  <div>
+    <div className="mb-5 flex items-center justify-between flex-wrap gap-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          value={yearFilter}
+          onChange={(e) => setYearFilter(Number(e.target.value))}
+          className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none cursor-pointer"
+        >
+          <option value={0}>Semua Tahun</option>
+          {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select
+          value={monthFilter}
+          onChange={(e) => setMonthFilter(Number(e.target.value))}
+          className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none cursor-pointer"
+        >
+          <option value={0}>Semua Bulan</option>
+          {monthNames.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+        </select>
+        <button
+          onClick={handleReset}
+          className="text-xs text-muted-foreground hover:text-primary border border-border rounded-xl px-3 py-2 transition hover:border-primary/40 cursor-pointer"
+        >
+          Reset
         </button>
+        <p className="text-sm text-muted-foreground">{totalCount} aktivitas</p>
       </div>
-
-      {loading ? (
-        <div className="py-10 text-center text-sm text-muted-foreground">Memuat...</div>
-      ) : filteredLogs.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Belum ada aktivitas bulan ini.</div>
-      ) : (
-        <div className="flex flex-col">
-          {filteredLogs.map((log) => {
-            const info = actionLabel[log.action] ?? { label: log.action, color: "bg-muted text-muted-foreground" };
-            return (
-              <div key={log.id} className="flex items-start justify-between border-b border-border py-3 gap-4">
-                <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <span className={cn("shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap", info.color)}>
-                    {info.label}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium text-foreground truncate">{log.detail ?? "-"}</p>
-                    <p className="text-xs text-muted-foreground">{log.actor}</p>
-                  </div>
-                </div>
-                <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">{formatDate(log.created_at)}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {totalPages > 1 && (
-        <div className="mt-6 flex items-center justify-center gap-1 flex-wrap">
-          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">←</button>
-          {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-            const p = i + 1;
-            return (
-              <button key={p} onClick={() => setPage(p)} className={cn("rounded-xl border px-3 py-2 text-sm cursor-pointer transition", page === p ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary")}>
-                {p}
-              </button>
-            );
-          })}
-          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">→</button>
-        </div>
-      )}
+      <button onClick={() => fetchLogs(page, yearFilter, monthFilter)} className="text-xs text-primary hover:underline cursor-pointer">
+        Refresh
+      </button>
     </div>
-  );
+
+    {loading ? (
+      <div className="py-10 text-center text-sm text-muted-foreground">Memuat...</div>
+    ) : filteredLogs.length === 0 ? (
+      <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Belum ada aktivitas bulan ini.</div>
+    ) : (
+      <div className="flex flex-col">
+        {filteredLogs.map((log) => {
+          const info = actionLabel[log.action] ?? { label: log.action, color: "bg-muted text-muted-foreground" };
+          return (
+            <div key={log.id} className="flex items-start justify-between border-b border-border py-3 gap-4">
+              <div className="flex items-start gap-3 min-w-0 flex-1">
+                <span className={cn("shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold whitespace-nowrap", info.color)}>
+                  {info.label}
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-foreground truncate">{log.detail ?? "-"}</p>
+                  <p className="text-xs text-muted-foreground">{log.actor}</p>
+                </div>
+              </div>
+              <span className="shrink-0 text-xs text-muted-foreground whitespace-nowrap">{formatDate(log.created_at)}</span>
+            </div>
+          );
+        })}
+      </div>
+    )}
+
+    {totalPages > 1 && (
+      <div className="mt-6 flex items-center justify-center gap-1 flex-wrap">
+        <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">←</button>
+        {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+          const p = i + 1;
+          return (
+            <button key={p} onClick={() => setPage(p)} className={cn("rounded-xl border px-3 py-2 text-sm cursor-pointer transition", page === p ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary")}>
+              {p}
+            </button>
+          );
+        })}
+        <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">→</button>
+      </div>
+    )}
+  </div>
+);
 }
 
 // ── Shared Components ──────────────────────────────────────────────

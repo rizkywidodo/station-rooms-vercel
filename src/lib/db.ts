@@ -123,13 +123,13 @@ export async function addLog(action: string, actor: string, detail?: string): Pr
   await supabase.from("activity_logs").insert({ action, actor, detail });
 }
 
-export async function getLogs(limit = 50, offset = 0, year?: number, month?: number): Promise<{ id: number; action: string; actor: string; detail: string | null; created_at: string }[]> {
+export async function getLogs(limit = 50, offset = 0, year?: number, month?: number) {
   let query = supabase
     .from("activity_logs")
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (year && month) {
+  if (year && month && year > 0 && month > 0) {
     const start = `${year}-${String(month).padStart(2, "0")}-01`;
     const end = new Date(year, month, 1).toISOString().slice(0, 10);
     query = query.gte("created_at", start).lt("created_at", end);
@@ -145,7 +145,7 @@ export async function getLogsCount(year?: number, month?: number): Promise<numbe
     .from("activity_logs")
     .select("*", { count: "exact", head: true });
 
-  if (year && month) {
+  if (year && month && year > 0 && month > 0) {
     const start = `${year}-${String(month).padStart(2, "0")}-01`;
     const end = new Date(year, month, 1).toISOString().slice(0, 10);
     query = query.gte("created_at", start).lt("created_at", end);
