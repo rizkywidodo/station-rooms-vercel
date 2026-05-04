@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Calendar, Check, Clock, Mail, Search, Users, X, Plus, Pencil, Trash2 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { STATUS_LABEL, ROOM_TYPE_LABEL, type Booking, type BookingStatus, type Station, type Room, type RoomType } from "@/lib/dummy-data";
-import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs, getLogsCount, deleteBooking, markAttended } from "@/lib/db";import { getUserProfile } from "@/lib/db";
+import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs, getLogsCount, deleteBooking, markAttended } from "@/lib/db";import { supabase } from "@/lib/supabase";
+import { getUserProfile } from "@/lib/db";
 import { sendBookingCancelled } from "@/lib/email";
 import { cn } from "@/lib/utils";
 
