@@ -1,6 +1,5 @@
-import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
-
-import appCss from "../styles.css?url";
+import { Outlet, Link, createRootRoute } from "@tanstack/react-router";
+import "../styles.css";
 
 function NotFoundComponent() {
   return (
@@ -25,48 +24,6 @@ function NotFoundComponent() {
 }
 
 export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Booking Ruang Stasiun · MRT Jakarta" },
-      { name: "description", content: "Sistem reservasi ruangan back-of-house stasiun MRT Jakarta." },
-      { name: "author", content: "MRT Jakarta" },
-      { property: "og:title", content: "Booking Ruang Stasiun · MRT Jakarta" },
-      { property: "og:description", content: "Sistem reservasi ruangan back-of-house stasiun MRT Jakarta." },
-      { name: "twitter:site", content: "@mrtjakarta" },
-    ],
-    links: [
-  {
-    rel: "stylesheet",
-    href: appCss,
-  },
-  {
-    rel: "icon",
-    href: "/favicon.svg",
-    type: "image/svg+xml",
-  },
-],
-  }),
-  shellComponent: RootShell,
-  component: RootComponent,
+  component: () => <Outlet />,
   notFoundComponent: NotFoundComponent,
 });
-
-function RootShell({ children }: { children: React.ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
-
-function RootComponent() {
-  return <Outlet />;
-}
