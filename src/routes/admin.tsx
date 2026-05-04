@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Calendar, Check, Clock, Mail, Search, Users, X, Plus, Pencil, Trash2 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { STATUS_LABEL, ROOM_TYPE_LABEL, type Booking, type BookingStatus, type Station, type Room, type RoomType } from "@/lib/dummy-data";
-import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs,getLogsYears, getLogsCount, deleteBooking, markAttended } from "@/lib/db";import { supabase } from "@/lib/supabase";
+import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs, getLogsCount, deleteBooking, markAttended } from "@/lib/db";import { supabase } from "@/lib/supabase";
 import { getUserProfile } from "@/lib/db";
 import { sendBookingCancelled } from "@/lib/email";
 import { cn } from "@/lib/utils";
@@ -219,11 +219,20 @@ function AdminPage() {
 }
 
 function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regionFilter, setRegionFilter, status, setStatus, search, setSearch, roomMap, stationMap, onDecide, onDelete, onAttended }: any) {
+  const now = new Date();
   const [page, setPage] = useState(1);
-  const [monthFilter, setMonthFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState(now.getFullYear());
+  const [monthFilter, setMonthFilter] = useState(now.getMonth() + 1);
+  const [availableYears, setAvailableYears] = useState<number[]>([now.getFullYear()]);
   const PER_PAGE = 6;
 
-  useEffect(() => { setPage(1); }, [filtered, monthFilter]);
+  useEffect(() => {
+    // get unique years from filtered bookings
+    const years = [...new Set(filtered.map((b: Booking) => new Date(b.date).getFullYear()))] as number[];
+    if (years.length > 0) setAvailableYears(years.sort((a: number, b: number) => b - a));
+  }, [filtered]);
+
+  useEffect(() => { setPage(1); }, [filtered, yearFilter, monthFilter]);
 
   const filteredStations = useMemo(() => {
     if (regionFilter === "all") return stations;
@@ -231,12 +240,16 @@ function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regi
   }, [stations, regionFilter]);
 
   const monthFiltered = useMemo(() => {
-    if (monthFilter === "all") return filtered;
-    return filtered.filter((b: Booking) => b.date.slice(0, 7) === monthFilter);
-  }, [filtered, monthFilter]);
+    return filtered.filter((b: Booking) => {
+      const d = new Date(b.date);
+      return d.getFullYear() === yearFilter && d.getMonth() + 1 === monthFilter;
+    });
+  }, [filtered, yearFilter, monthFilter]);
 
   const totalPages = Math.ceil(monthFiltered.length / PER_PAGE);
   const paginated = monthFiltered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
   return (
     <div>
@@ -261,25 +274,28 @@ function BookingsTab({ filtered, stations, stationFilter, setStationFilter, regi
           <option value="confirmed">Terkonfirmasi</option>
           <option value="rejected">Ditolak</option>
         </select>
-        <select
-          value={monthFilter}
-          onChange={(e) => setMonthFilter(e.target.value)}
-          className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
-        >
-          <option value="all">Semua Bulan</option>
-          {Array.from({ length: 12 }, (_, i) => {
-            const d = new Date();
-            d.setMonth(d.getMonth() - i);
-            const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-            const label = d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
-            return <option key={val} value={val}>{label}</option>;
-          })}
-        </select>
+        <div className="flex items-center gap-1 rounded-xl border border-primary/30 bg-primary/5 px-3 py-2">
+          <select
+            value={yearFilter}
+            onChange={(e) => setYearFilter(Number(e.target.value))}
+            className="text-sm font-medium text-primary focus:outline-none bg-transparent cursor-pointer"
+          >
+            {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+          <span className="text-primary/50 text-xs">·</span>
+          <select
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(Number(e.target.value))}
+            className="text-sm font-medium text-primary focus:outline-none bg-transparent cursor-pointer"
+          >
+            {monthNames.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+          </select>
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         {monthFiltered.length === 0 ? (
-          <div className="col-span-2 rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Tidak ada pengajuan.</div>
+          <div className="col-span-2 rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Tidak ada pengajuan bulan ini.</div>
         ) : (
           paginated.map((b: Booking) => (
             <AdminBookingRow key={b.id} booking={b} roomName={roomMap[b.roomId]?.name ?? b.roomId} stationName={stationMap[roomMap[b.roomId]?.stationId ?? ""] ?? ""} onDecide={onDecide} onDelete={onDelete} onAttended={onAttended} />
@@ -539,18 +555,22 @@ function StationsTab({ stations, rooms, onRefresh, adminEmail }: { stations: Sta
 }
 
 function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds: string[] | null; stationMap: Record<string, string>; roomMap: Record<string, { name: string; stationId: string }> }) {
-  const now = new Date();
+ const now = new Date();
+  const [yearFilter, setYearFilter] = useState(now.getFullYear());
+  const [monthFilter, setMonthFilter] = useState(now.getMonth() + 1);
+  const [availableYears, setAvailableYears] = useState<number[]>([now.getFullYear()]);
+
   const [logs, setLogs] = useState<{ id: number; action: string; actor: string; detail: string | null; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [yearFilter, setYearFilter] = useState(now.getFullYear());
-  const [monthFilter, setMonthFilter] = useState(now.getMonth() + 1);
   const PER_PAGE = 20;
-  const [availableYears, setAvailableYears] = useState<number[]>([now.getFullYear()]);
 
 useEffect(() => {
-  getLogsYears().then(setAvailableYears);
+  getLogs(1000, 0).then((data) => {
+    const years = [...new Set(data.map((d) => new Date(d.created_at).getFullYear()))] as number[];
+    if (years.length > 0) setAvailableYears(years.sort((a, b) => b - a));
+  });
 }, []);
 
   const fetchLogs = async (p: number, y: number, m: number) => {
