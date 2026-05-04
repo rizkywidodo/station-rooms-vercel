@@ -16,6 +16,7 @@ import { getBookings, getRooms, getStations } from "@/lib/db";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "Booking Ruang Stasiun · MRT Jakarta" },
@@ -40,17 +41,28 @@ function IndexPage() {
   const [perPage, setPerPage] = useState(8);
 
   useEffect(() => {
-    if (window.innerWidth < 768) setPerPage(4);
-  }, []);
+  const handleResize = () => setPerPage(window.innerWidth < 768 ? 4 : 8);
+  handleResize();
+}, []);
 
   useEffect(() => {
-    Promise.all([getBookings(), getRooms(), getStations()]).then(([b, r, s]) => {
+  const fetchData = async (retries = 3) => {
+    try {
+      const [b, r, s] = await Promise.all([getBookings(), getRooms(), getStations()]);
       setBookings(b);
       setRooms(r);
       setStations(s);
       setLoading(false);
-    });
-  }, []);
+    } catch (err) {
+      if (retries > 0) {
+        setTimeout(() => fetchData(retries - 1), 1000);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
+  fetchData();
+}, []);
 
   const roomMap = useMemo(() =>
     Object.fromEntries(rooms.map((r) => [r.id, { name: r.name, stationId: r.stationId }])),

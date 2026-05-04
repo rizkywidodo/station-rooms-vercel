@@ -159,6 +159,7 @@ function BookRoomPage() {
         visitorType: d.visitorType,
       });
       setSubmittedId(created.id);
+      setBookings((prev) => [...prev, created]);
       await addLog(
         "SUBMIT_BOOKING",
         d.email,
