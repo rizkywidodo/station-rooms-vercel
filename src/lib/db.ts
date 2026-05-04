@@ -200,3 +200,13 @@ export async function markAttended(id: number): Promise<void> {
     .eq("id", id);
   if (error) throw error;
 }
+
+export async function getLogsYears(): Promise<number[]> {
+  const { data, error } = await supabase
+    .from("activity_logs")
+    .select("created_at")
+    .order("created_at", { ascending: false });
+  if (error) return [];
+  const years = [...new Set(data.map((d: any) => new Date(d.created_at).getFullYear()))];
+  return years.sort((a, b) => b - a);
+}

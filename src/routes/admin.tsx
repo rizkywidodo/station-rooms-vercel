@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Calendar, Check, Clock, Mail, Search, Users, X, Plus, Pencil, Trash2 } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { STATUS_LABEL, ROOM_TYPE_LABEL, type Booking, type BookingStatus, type Station, type Room, type RoomType } from "@/lib/dummy-data";
-import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs, getLogsCount, deleteBooking, markAttended } from "@/lib/db";import { supabase } from "@/lib/supabase";
+import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs,getLogsYears, getLogsCount, deleteBooking, markAttended } from "@/lib/db";import { supabase } from "@/lib/supabase";
 import { getUserProfile } from "@/lib/db";
 import { sendBookingCancelled } from "@/lib/email";
 import { cn } from "@/lib/utils";
@@ -547,6 +547,11 @@ function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds
   const [yearFilter, setYearFilter] = useState(now.getFullYear());
   const [monthFilter, setMonthFilter] = useState(now.getMonth() + 1);
   const PER_PAGE = 20;
+  const [availableYears, setAvailableYears] = useState<number[]>([now.getFullYear()]);
+
+useEffect(() => {
+  getLogsYears().then(setAvailableYears);
+}, []);
 
   const fetchLogs = async (p: number, y: number, m: number) => {
     setLoading(true);
@@ -609,7 +614,7 @@ function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds
             onChange={(e) => setYearFilter(Number(e.target.value))}
             className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >
-            {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+            {availableYears.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
           <select
             value={monthFilter}
