@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [
+    TanStackRouterVite({ autoCodeSplitting: true }),
     react(),
     tsConfigPaths(),
     tailwindcss(),
@@ -13,4 +14,12 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 8080,
   },
+  build: {
+    rollupOptions: {
+      input: {
+        main: "./index.html",
+      },
+    },
+  },
 });
+
