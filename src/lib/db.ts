@@ -123,20 +123,35 @@ export async function addLog(action: string, actor: string, detail?: string): Pr
   await supabase.from("activity_logs").insert({ action, actor, detail });
 }
 
-export async function getLogs(limit = 50, offset = 0): Promise<{ id: number; action: string; actor: string; detail: string | null; created_at: string }[]> {
-  const { data, error } = await supabase
+export async function getLogs(limit = 50, offset = 0, year?: number, month?: number): Promise<{ id: number; action: string; actor: string; detail: string | null; created_at: string }[]> {
+  let query = supabase
     .from("activity_logs")
     .select("*")
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
+    .order("created_at", { ascending: false });
+
+  if (year && month) {
+    const start = `${year}-${String(month).padStart(2, "0")}-01`;
+    const end = new Date(year, month, 1).toISOString().slice(0, 10);
+    query = query.gte("created_at", start).lt("created_at", end);
+  }
+
+  const { data, error } = await query.range(offset, offset + limit - 1);
   if (error) throw error;
   return data;
 }
 
-export async function getLogsCount(): Promise<number> {
-  const { count, error } = await supabase
+export async function getLogsCount(year?: number, month?: number): Promise<number> {
+  let query = supabase
     .from("activity_logs")
     .select("*", { count: "exact", head: true });
+
+  if (year && month) {
+    const start = `${year}-${String(month).padStart(2, "0")}-01`;
+    const end = new Date(year, month, 1).toISOString().slice(0, 10);
+    query = query.gte("created_at", start).lt("created_at", end);
+  }
+
+  const { count, error } = await query;
   if (error) return 0;
   return count ?? 0;
 }

@@ -539,40 +539,37 @@ function StationsTab({ stations, rooms, onRefresh, adminEmail }: { stations: Sta
 }
 
 function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds: string[] | null; stationMap: Record<string, string>; roomMap: Record<string, { name: string; stationId: string }> }) {
+  const now = new Date();
   const [logs, setLogs] = useState<{ id: number; action: string; actor: string; detail: string | null; created_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [monthFilter, setMonthFilter] = useState(() => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [yearFilter, setYearFilter] = useState(now.getFullYear());
+  const [monthFilter, setMonthFilter] = useState(now.getMonth() + 1);
   const PER_PAGE = 20;
 
-  const fetchLogs = async (p: number) => {
+  const fetchLogs = async (p: number, y: number, m: number) => {
     setLoading(true);
     const offset = (p - 1) * PER_PAGE;
-    const [data, count] = await Promise.all([getLogs(PER_PAGE, offset), getLogsCount()]);
+    const [data, count] = await Promise.all([getLogs(PER_PAGE, offset, y, m), getLogsCount(y, m)]);
     setLogs(data);
     setTotalCount(count);
     setLoading(false);
   };
 
-  useEffect(() => { fetchLogs(page); }, [page]);
-  useEffect(() => { setPage(1); fetchLogs(1); }, [monthFilter]);
+  useEffect(() => { fetchLogs(page, yearFilter, monthFilter); }, [page]);
+  useEffect(() => { setPage(1); fetchLogs(1, yearFilter, monthFilter); }, [yearFilter, monthFilter]);
 
   const filteredLogs = useMemo(() => {
+    if (!allowedStationIds) return logs;
     return logs.filter((log) => {
-      const logMonth = log.created_at.slice(0, 7);
-      if (logMonth !== monthFilter) return false;
-      if (!allowedStationIds) return true;
       if (!log.detail) return false;
       return allowedStationIds.some((id) => {
         const stationName = stationMap[id];
         return log.detail!.toLowerCase().includes(stationName?.toLowerCase() ?? id);
       });
     });
-  }, [logs, monthFilter, allowedStationIds, stationMap]);
+  }, [logs, allowedStationIds, stationMap]);
 
   const totalPages = Math.ceil(totalCount / PER_PAGE);
 
@@ -595,34 +592,35 @@ function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds
       " · " + d.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
   };
 
-  // Generate last 12 months options
-  const monthOptions = Array.from({ length: 12 }, (_, i) => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - i);
-    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const label = d.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
-    return { val, label };
-  });
+  const yearOptions = Array.from({ length: 3 }, (_, i) => now.getFullYear() - i);
+  const monthOptions = [
+    { val: 1, label: "Januari" }, { val: 2, label: "Februari" }, { val: 3, label: "Maret" },
+    { val: 4, label: "April" }, { val: 5, label: "Mei" }, { val: 6, label: "Juni" },
+    { val: 7, label: "Juli" }, { val: 8, label: "Agustus" }, { val: 9, label: "September" },
+    { val: 10, label: "Oktober" }, { val: 11, label: "November" }, { val: 12, label: "Desember" },
+  ];
 
   return (
     <div>
       <div className="mb-5 flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <select
-            value={monthFilter}
-            onChange={(e) => setMonthFilter(e.target.value)}
+            value={yearFilter}
+            onChange={(e) => setYearFilter(Number(e.target.value))}
             className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
           >
-            {monthOptions.map((m) => (
-              <option key={m.val} value={m.val}>{m.label}</option>
-            ))}
+            {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
-          <p className="text-sm text-muted-foreground">{filteredLogs.length} aktivitas</p>
+          <select
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(Number(e.target.value))}
+            className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          >
+            {monthOptions.map((m) => <option key={m.val} value={m.val}>{m.label}</option>)}
+          </select>
+          <p className="text-sm text-muted-foreground">{totalCount} aktivitas</p>
         </div>
-        <button
-          onClick={() => fetchLogs(page)}
-          className="text-xs text-primary hover:underline"
-        >
+        <button onClick={() => fetchLogs(page, yearFilter, monthFilter)} className="text-xs text-primary hover:underline">
           Refresh
         </button>
       </div>
@@ -655,27 +653,16 @@ function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds
 
       {totalPages > 1 && (
         <div className="mt-6 flex items-center justify-center gap-1 flex-wrap">
-          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">
-            ←
-          </button>
+          <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">←</button>
           {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
             const p = i + 1;
             return (
-              <button
-                key={p}
-                onClick={() => setPage(p)}
-                className={cn(
-                  "rounded-xl border px-3 py-2 text-sm cursor-pointer transition",
-                  page === p ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"
-                )}
-              >
+              <button key={p} onClick={() => setPage(p)} className={cn("rounded-xl border px-3 py-2 text-sm cursor-pointer transition", page === p ? "border-primary bg-primary text-white" : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary")}>
                 {p}
               </button>
             );
           })}
-          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">
-            →
-          </button>
+          <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40 cursor-pointer">→</button>
         </div>
       )}
     </div>
