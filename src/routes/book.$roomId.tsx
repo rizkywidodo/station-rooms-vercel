@@ -175,8 +175,7 @@ function BookRoomPage() {
         endTime: d.endTime,
       });
 
-      const stationEmail = getStationEmail(station.id);
-      console.log("Station ID:", station.id, "Station Email:", stationEmail);
+      const stationEmail = await getStationEmail(station.id);
       if (stationEmail) {
         sendBookingNotifToStation(stationEmail, {
           bookingId: created.id,

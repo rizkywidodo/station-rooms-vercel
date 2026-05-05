@@ -149,7 +149,7 @@ useEffect(() => { setPage(1); }, [search, statusFilter, selectedDate, regionFilt
       <SiteHeader />
 
       {/* Hero */}
-      <section className="mx-auto max-w-7xl px-4 pt-14 pb-10 sm:px-6">
+      <section className="mx-auto max-w-7xl px-4 pt-10 pb-10 sm:px-6">
         <div className="max-w-2xl">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-success/20 bg-success/5 px-3 py-1 text-xs font-semibold text-success">
             <span className="h-1.5 w-1.5 rounded-full bg-success" />

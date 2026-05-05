@@ -8,6 +8,7 @@ export interface Station {
   id: string;
   name: string;
   region: 1 | 2 | 3;
+  email?: string | null;
 }
 
 export interface Room {

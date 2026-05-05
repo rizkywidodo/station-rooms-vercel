@@ -1,3 +1,5 @@
+import { supabase } from "./supabase";
+
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
@@ -15,6 +17,16 @@ async function sendEmail(to: string, subject: string, html: string) {
     console.error("Email error:", err);
   }
 }
+
+export async function getStationEmail(stationId: string): Promise<string | null> {
+  const { data } = await supabase
+    .from("stations")
+    .select("email")
+    .eq("id", stationId)
+    .maybeSingle();
+  return data?.email ?? null;
+}
+
 export async function sendBookingConfirmation(to: string, data: {
   name: string;
   bookingId: number;
@@ -76,26 +88,6 @@ export async function sendBookingCancelled(to: string, data: {
     </div>
     `
   );
-}
-
-const STATION_EMAILS: Record<string, string> = {
-  "bundaran-hi": "abizarrachmanda@gmail.com",
-  "dukuh-atas": "stasiun.dukuhatas@jakartamrt.co.id",
-  "setiabudi": "stasiun.setiabudi@jakartamrt.co.id",
-  "bendungan-hilir": "stasiun.bendunganhilir@jakartamrt.co.id",
-  "istora": "Istora@jakartamrt.co.id",
-  "senayan": "senayan@jakartamrt.co.id",
-  "asean": "asean@jakartamrt.co.id",
-  "blok-m": "Blokm@jakartamrt.co.id",
-  "blok-a": "bloka@jakartamrt.co.id",
-  "haji-nawi": "hajinawi@jakartamrt.co.id",
-  "cipete-raya": "cipeteraya@jakartamrt.co.id",
-  "fatmawati": "fatmawati@jakartamrt.co.id",
-  "lebak-bulus": "lebakbulus@jakartamrt.co.id",
-};
-
-export function getStationEmail(stationId: string): string | null {
-  return STATION_EMAILS[stationId] ?? null;
 }
 
 export async function sendBookingNotifToStation(stationEmail: string, data: {

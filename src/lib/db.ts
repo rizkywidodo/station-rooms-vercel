@@ -1,11 +1,34 @@
 import { supabase } from "./supabase";
 import type { BookingStatus, Booking, Station, Room } from "./dummy-data";
 
+const STATION_ORDER: Record<string, number> = {
+  "bundaran-hi": 1,
+  "dukuh-atas": 2,
+  "setiabudi": 3,
+  "bendungan-hilir": 4,
+  "istora": 5,
+  "senayan": 6,
+  "asean": 7,
+  "blok-m": 8,
+  "blok-a": 9,
+  "haji-nawi": 10,
+  "cipete-raya": 11,
+  "fatmawati": 12,
+  "lebak-bulus": 13,
+};
+
 // Stations
 export async function getStations(): Promise<Station[]> {
   const { data, error } = await supabase.from("stations").select("*");
   if (error) throw error;
-  return data.map((s) => ({ id: s.id, name: s.name, region: s.region as 1 | 2 | 3 }));
+  return data
+    .map((s) => ({ id: s.id, name: s.name, region: s.region as 1 | 2 | 3, email: s.email ?? null }))
+    .sort((a, b) => (STATION_ORDER[a.id] ?? 99) - (STATION_ORDER[b.id] ?? 99));
+}
+
+export async function updateStationEmail(stationId: string, email: string): Promise<void> {
+  const { error } = await supabase.from("stations").update({ email }).eq("id", stationId);
+  if (error) throw error;
 }
 
 // Rooms

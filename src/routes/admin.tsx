@@ -4,7 +4,7 @@ import { Calendar, Check, Clock, Mail, Search, Users, X, Plus, Pencil, Trash2 } 
 import { SiteHeader } from "@/components/site-header";
 import { STATUS_LABEL, ROOM_TYPE_LABEL, type Booking, type BookingStatus, type Station, type Room, type RoomType } from "@/lib/dummy-data";
 import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updateRoom, deleteRoom, addLog, getLogs, getLogsCount, deleteBooking, markAttended } from "@/lib/db";import { supabase } from "@/lib/supabase";
-import { getUserProfile } from "@/lib/db";
+import { getUserProfile, updateStationEmail } from "@/lib/db";
 import { sendBookingCancelled } from "@/lib/email";
 import { cn } from "@/lib/utils";
 
@@ -542,21 +542,105 @@ function StationsTab({ stations, rooms, onRefresh, adminEmail }: { stations: Sta
         {stations.map((s) => {
           const roomCount = rooms.filter((r) => r.stationId === s.id).length;
           return (
-            <div key={s.id} className="flex items-center justify-between border-b border-border py-3">
-              <div>
-                <span className="font-medium">{s.name}</span>
-                <span className="ml-3 text-xs text-muted-foreground">Region {s.region} · {roomCount} ruangan</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-mono text-muted-foreground/50">{s.id}</span>
-                <button onClick={() => handleDelete(s.id, s.name)} className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-destructive/40 hover:text-destructive">
-                  <Trash2 className="h-3 w-3" /> Hapus
-                </button>
-              </div>
-            </div>
+            <StationRow
+              key={s.id}
+              station={s}
+              roomCount={roomCount}
+              onDelete={() => handleDelete(s.id, s.name)}
+              onRefresh={onRefresh}
+              adminEmail={adminEmail}
+            />
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function StationRow({ station, roomCount, onDelete, onRefresh, adminEmail }: {
+  station: Station;
+  roomCount: number;
+  onDelete: () => void;
+  onRefresh: () => void;
+  adminEmail: string;
+}) {
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [emailValue, setEmailValue] = useState(station.email ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const [currentEmail, setCurrentEmail] = useState(station.email ?? "");
+
+const handleSaveEmail = async () => {
+  setSaving(true);
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { alert("Sesi expired, silakan login ulang."); setSaving(false); return; }
+    await updateStationEmail(station.id, emailValue);
+    await addLog("UPDATE_STATION_EMAIL", adminEmail, `Update email stasiun "${station.name}" → ${emailValue}`);
+    setCurrentEmail(emailValue);
+    setEditingEmail(false);
+    onRefresh();
+  } catch { alert("Gagal menyimpan email"); }
+  setSaving(false);
+};
+
+  return (
+    <div className="border-b border-border py-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <span className="font-medium">{station.name}</span>
+          <span className="ml-3 text-xs text-muted-foreground">Region {station.region} · {roomCount} ruangan</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono text-muted-foreground/50">{station.id}</span>
+          <button
+            onClick={() => setEditingEmail((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary"
+          >
+            <Pencil className="h-3 w-3" /> Email
+          </button>
+          <button
+            onClick={onDelete}
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-destructive/40 hover:text-destructive"
+          >
+            <Trash2 className="h-3 w-3" /> Hapus
+          </button>
+        </div>
+      </div>
+
+      {!editingEmail && (
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {currentEmail
+            ? `📧 ${currentEmail}`
+            : <span className="text-warning">⚠ Email belum diset</span>
+          }
+        </p>
+      )}
+
+      {editingEmail && (
+        <div className="mt-2 flex items-center gap-2">
+          <input
+            type="email"
+            value={emailValue}
+            onChange={(e) => setEmailValue(e.target.value)}
+            placeholder="email@jakartamrt.co.id"
+            className="flex-1 rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+          />
+          <button
+            onClick={handleSaveEmail}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-semibold text-white hover:brightness-110 disabled:opacity-60"
+          >
+            <Check className="h-3.5 w-3.5" /> Simpan
+          </button>
+          <button
+            onClick={() => { setEditingEmail(false); setEmailValue(currentEmail); }}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
