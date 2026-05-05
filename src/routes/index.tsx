@@ -3,6 +3,7 @@ import { useMemo, useState, useEffect } from "react";
 import { ArrowRight, Search, Plus } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { BookingCard } from "@/components/booking-card";
+import { supabase } from "@/lib/supabase";
 import {
   REGION_LABEL,
   ROOM_TYPE_LABEL,
@@ -46,22 +47,38 @@ function IndexPage() {
 }, []);
 
   useEffect(() => {
+  let cancelled = false;
+
   const fetchData = async (retries = 3) => {
     try {
       const [b, r, s] = await Promise.all([getBookings(), getRooms(), getStations()]);
-      setBookings(b);
-      setRooms(r);
-      setStations(s);
-      setLoading(false);
+      if (!cancelled) {
+        setBookings(b);
+        setRooms(r);
+        setStations(s);
+        setLoading(false);
+      }
     } catch (err) {
       if (retries > 0) {
         setTimeout(() => fetchData(retries - 1), 1000);
       } else {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
   };
+
   fetchData();
+
+  // Re-fetch kalau user baru login/logout
+  const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+    setLoading(true);
+    fetchData();
+  });
+
+  return () => {
+    cancelled = true;
+    subscription.unsubscribe();
+  };
 }, []);
 
   const roomMap = useMemo(() =>

@@ -10,16 +10,11 @@ export function SiteHeader() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (data.session) {
-        setIsAdmin(true);
-        const p = await getUserProfile(data.session.user.id);
-        setProfile(p);
-      }
-    });
+    // Satu listener aja, handles initial session + perubahan
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
         setIsAdmin(true);
@@ -44,10 +39,23 @@ export function SiteHeader() {
   }, []);
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setDropdownOpen(false);
+  setLoggingOut(true);
+  setDropdownOpen(false);
+  
+  // Timeout fallback — kalau signOut hang lebih dari 3 detik, redirect aja
+  const timeout = setTimeout(() => {
     window.location.href = "/";
-  };
+  }, 3000);
+
+  try {
+    await supabase.auth.signOut();
+    clearTimeout(timeout);
+  } catch (_) {
+    clearTimeout(timeout);
+  } finally {
+    window.location.href = "/";
+  }
+};
 
   const displayRole = () => {
     if (!profile) return "Admin";
@@ -117,9 +125,11 @@ export function SiteHeader() {
                   </div>
                   <button
                     onClick={logout}
-                    className="flex w-full items-center gap-2 rounded-b-xl px-4 py-2.5 text-xs font-medium text-muted-foreground transition hover:text-destructive hover:bg-destructive/5 cursor-pointer"                  >
+                    disabled={loggingOut}
+                    className="flex w-full items-center gap-2 rounded-b-xl px-4 py-2.5 text-xs font-medium text-muted-foreground transition hover:text-destructive hover:bg-destructive/5 cursor-pointer disabled:opacity-50"
+                  >
                     <LogOut className="h-3.5 w-3.5" />
-                    Logout
+                    {loggingOut ? "Logging out..." : "Logout"}
                   </button>
                 </div>
               )}
