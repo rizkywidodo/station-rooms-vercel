@@ -7,6 +7,9 @@ import { getBookings, getRooms, getStations, updateBookingStatus, addRoom, updat
 import { getUserProfile, updateStationEmail } from "@/lib/db";
 import { sendBookingCancelled } from "@/lib/email";
 import { cn } from "@/lib/utils";
+import { WeeklyTrendCard } from "./WeeklyTrendCard";
+import { StationComparisonCard } from "./StationComparisonCard";
+import { PeakHoursCard } from "./PeakHoursCard";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin Dashboard · MRT Jakarta Booking" }] }),
@@ -75,6 +78,16 @@ function AdminPage() {
     return stations.filter((s) => allowedStationIds.includes(s.id));
   }, [stations, allowedStationIds]);
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  const parseTime = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  };  
+
   const filtered = useMemo(() => {
     return bookings
       .filter((b) => status === "all" ? true : b.status === status)
@@ -107,11 +120,143 @@ function AdminPage() {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [bookings, status, stationFilter, regionFilter, search, roomMap, stationMap, stations, allowedStationIds]);
 
+  const todayBuckets = useMemo(() => {
+    const todayBookings = filtered.filter((b) => b.date === todayStr);
+
+    const inUse: Booking[] = [];
+    const upcoming: Booking[] = [];
+    const canceled: Booking[] = [];
+
+    todayBookings.forEach((b) => {
+      const start = parseTime(b.startTime);
+      const end = parseTime(b.endTime);
+
+      if (b.status === "rejected") {
+        canceled.push(b);
+        return;
+      }
+
+      if (b.status === "confirmed") {
+        if (start <= nowMinutes && nowMinutes <= end) {
+          inUse.push(b);
+        } else if (nowMinutes < start) {
+          upcoming.push(b);
+        }
+      }
+    });
+
+    return { inUse, upcoming, canceled };
+  }, [filtered, todayStr, nowMinutes]);  
+
   const counts = useMemo(() => ({
     pending: filtered.filter((b) => b.status === "pending").length,
     confirmed: filtered.filter((b) => b.status === "confirmed").length,
     rejected: filtered.filter((b) => b.status === "rejected").length,
   }), [filtered]);
+
+  const [weekOffset, setWeekOffset] = useState(0);  
+
+  const weeklyData = useMemo(() => {
+    if (!Array.isArray(filtered)) return [];
+
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    const formatLocalDate = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+
+      return `${year}-${month}-${day}`;
+    };
+
+    const today = new Date();
+
+    today.setDate(today.getDate() + weekOffset * 7);
+
+    const day = today.getDay();
+
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+
+    const monday = new Date(today);
+
+    monday.setHours(0, 0, 0, 0);
+
+    monday.setDate(today.getDate() + diffToMonday);
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const current = new Date(monday);
+
+      current.setDate(monday.getDate() + i);
+
+      const targetDate = formatLocalDate(current);
+
+      let total = 0;
+      let completed = 0;
+      let canceled = 0;
+
+      filtered.forEach((booking) => {
+        if (!booking?.date) return;
+
+        const parsed = new Date(booking.date);
+
+        if (isNaN(parsed.getTime())) return;
+
+        const bookingDate = formatLocalDate(parsed);
+
+        if (bookingDate !== targetDate) return;
+
+        total++;
+
+        if (booking.attended) {
+          completed++;
+        }
+
+        if (booking.status === "rejected") {
+          canceled++;
+        }
+      });
+
+      return {
+        day: days[current.getDay()],
+        fullDate: targetDate,
+        bookings: total,
+        completed,
+        canceled,
+      };
+    });
+  }, [filtered, weekOffset]);
+
+  console.log(weeklyData);
+
+  const weekLabel = useMemo(() => {
+    if (weeklyData.length === 0) return "";
+
+    const start = new Date(weeklyData[0].fullDate);
+    const end = new Date(weeklyData[6].fullDate);
+
+    return `${start.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+    })} - ${end.toLocaleDateString("id-ID", {
+      day: "numeric",
+      month: "short",
+    })}`;
+  }, [weeklyData]); 
+  
+          console.log(weeklyData);       
+
+  const statusData = [
+    { name: "Confirmed", value: counts.confirmed },
+    { name: "Pending", value: counts.pending },
+    { name: "Rejected", value: counts.rejected },
+  ];
+
+  const stationData = visibleStations.map((s) => ({
+    station: s.name,
+    bookings: bookings.filter((b) => {
+      return roomMap[b.roomId]?.stationId === s.id;
+    }).length,
+  }));    
 
   if (!authed) return null;
 
@@ -170,6 +315,61 @@ function AdminPage() {
           <StatCard label="Terkonfirmasi" value={counts.confirmed} tone="success" />
           <StatCard label="Ditolak" value={counts.rejected} tone="destructive" />
         </div>
+        <div className="grid gap-3 lg:grid-cols-2 mb-8">
+
+          {/* Row 1 */}
+          <BookingSection
+            title="Sedang Digunakan"
+            data={todayBuckets.inUse}
+            roomMap={roomMap}
+            stationMap={stationMap}
+          />
+
+          <BookingSection
+            title="Akan Digunakan"
+            data={todayBuckets.upcoming}
+            roomMap={roomMap}
+            stationMap={stationMap}
+          />
+
+          {/* Row 2 */}
+          <BookingSection
+            title="Dibatalkan Hari Ini"
+            data={todayBuckets.canceled}
+            roomMap={roomMap}
+            stationMap={stationMap}
+          />
+
+          <WeeklyTrendCard
+            data={weeklyData}
+            weekLabel={weekLabel}
+            onPrev={() => setWeekOffset((v) => v - 1)}
+            onNext={() => setWeekOffset((v) => v + 1)}
+          />    
+          
+          <StationComparisonCard
+            bookings={filtered}
+            stations={visibleStations}
+            roomMap={roomMap}
+          />  
+
+          <PeakHoursCard
+            bookings={bookings}
+          />                        
+
+
+          {/* <DashboardCharts
+            weeklyData={weeklyData}
+            statusData={statusData}
+            stationData={stationData}
+          />           */}
+
+          {/* Row 3
+          <StationComparisonCard data={stationData} />
+
+          <StatusDistributionCard data={statusData} /> */}
+
+        </div>        
         <div className="flex gap-1 border-b border-border mb-6">
           {tabs.map((t) => (
             <button
@@ -833,14 +1033,36 @@ function AdminBookingRow({ booking, roomName, stationName, onDecide, onDelete, o
         </div>
           {booking.status === "confirmed" && !booking.attended && (
           <div className="flex shrink-0 flex-row gap-2 items-center">
-            {(booking.attended === false || booking.attended === null || booking.attended === undefined) && (
-              <button
-                onClick={() => onAttended(booking.id)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-success/30 bg-success/10 px-4 py-2 text-xs font-semibold text-success transition-all duration-200 hover:bg-success hover:text-white hover:border-success hover:scale-105 cursor-pointer whitespace-nowrap"
-              >
-                <Check className="h-3.5 w-3.5" /> Hadir
-              </button>
-            )}
+            {(booking.attended === false || booking.attended === null || booking.attended === undefined) && (() => {
+              const now = new Date();
+
+              const bookingStart = new Date(`${booking.date}T${booking.startTime}`);
+
+              const canMarkAttended = now >= bookingStart;
+
+              return (
+                <button
+                  disabled={!canMarkAttended}
+                  onClick={() => {
+                    if (!canMarkAttended) return;
+                    onAttended(booking.id);
+                  }}
+                  title={
+                    !canMarkAttended
+                      ? "Bisa dikonfirmasi saat waktu booking dimulai"
+                      : "Konfirmasi kehadiran"
+                  }
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold whitespace-nowrap transition-all duration-200",
+                    canMarkAttended
+                      ? "border border-success/30 bg-success/10 text-success hover:bg-success hover:text-white hover:border-success hover:scale-105 cursor-pointer"
+                      : "border border-border bg-muted text-muted-foreground cursor-not-allowed opacity-60"
+                  )}
+                >
+                  <Check className="h-3.5 w-3.5" /> Hadir
+                </button>
+              );
+            })()}
             <button
               onClick={() => setShowCancelDialog(true)}
               className="inline-flex items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2 text-xs font-semibold text-destructive transition-all duration-200 hover:bg-destructive hover:text-white hover:border-destructive hover:scale-105 cursor-pointer whitespace-nowrap"
@@ -901,6 +1123,44 @@ function AdminBookingRow({ booking, roomName, stationName, onDecide, onDelete, o
               Batal
             </button>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BookingSection({ title, data, roomMap, stationMap }: any) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 h-72 flex flex-col">
+      <h2 className="text-sm font-semibold mb-3">{title}</h2>
+
+      {data.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-xs text-muted-foreground border border-dashed border-border rounded-xl">
+          Belum ada booking
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto divide-y divide-border">
+          {data.map((b: Booking) => {
+            const room = roomMap[b.roomId];
+            const stationName = stationMap[room?.stationId ?? ""] ?? "-";
+
+            return (
+              <div key={b.id} className="py-2 text-xs flex items-center justify-between">
+                <div className="min-w-0">
+                  <div className="font-medium truncate">
+                    {stationName} · {room?.name ?? b.roomId}
+                  </div>
+                  <div className="text-muted-foreground truncate">
+                    {b.requesterName}
+                  </div>
+                </div>
+
+                <div className="text-muted-foreground whitespace-nowrap">
+                  {b.startTime}–{b.endTime}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

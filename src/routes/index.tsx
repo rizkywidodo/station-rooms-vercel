@@ -185,13 +185,85 @@ useEffect(() => { setPage(1); }, [search, statusFilter, selectedDate, regionFilt
         <div className="space-y-8">
           {([1, 2, 3] as const).map((region) => {
             const sts = getStationsByRegion(region);
+
             return (
               <div key={region}>
-                <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">{REGION_LABEL[region]}</p>
+                <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                  {REGION_LABEL[region]}
+                </p>
+
                 <div className="flex flex-col">
                   {sts.map((s) => {
                     const hasRooms = stationHasRooms(s.id);
-                    const roomCount = getRoomsByStation(s.id).length;
+
+                    const rooms = getRoomsByStation(s.id);
+
+                    const roomCount = rooms.length;
+
+                    const today = new Date().toISOString().slice(0, 10);
+
+                    const todayBookings = bookings.filter(
+                      (b) =>
+                        rooms.some((r) => r.id === b.roomId) &&
+                        b.date === today &&
+                        b.status !== "rejected"
+                    );
+
+                    let status = "Available Today";
+
+                    let statusClass =
+                      "bg-green-100 text-green-700 border-green-200";
+
+                    if (todayBookings.length > 0) {
+                      status = "Partially Booked";
+
+                      statusClass =
+                        "bg-yellow-100 text-yellow-700 border-yellow-200";
+                    }
+
+                    const fullyBookedRooms = rooms.filter((room) => {
+                      const roomBookings = todayBookings.filter(
+                        (b) => b.roomId === room.id
+                      );
+
+                      const occupiedHours = new Set<number>();
+
+                      roomBookings.forEach((b) => {
+                        const start = parseInt(b.startTime.slice(0, 2));
+
+                        const end = parseInt(b.endTime.slice(0, 2));
+
+                        for (let h = start; h < end; h++) {
+                          occupiedHours.add(h);
+                        }
+                      });
+
+                      const now = new Date();
+
+                      const isToday =
+                        today === now.toISOString().slice(0, 10);
+
+                      if (isToday) {
+                        const currentHour = now.getHours();
+
+                        for (let h = 8; h <= currentHour; h++) {
+                          occupiedHours.add(h);
+                        }
+                      }
+
+                      return occupiedHours.size >= 11;
+                    });
+
+                    if (
+                      roomCount > 0 &&
+                      fullyBookedRooms.length === roomCount
+                    ) {
+                      status = "Full Today";
+
+                      statusClass =
+                        "bg-red-100 text-red-700 border-red-200";
+                    }
+
                     return hasRooms ? (
                       <Link
                         key={s.id}
@@ -199,16 +271,42 @@ useEffect(() => { setPage(1); }, [search, statusFilter, selectedDate, regionFilt
                         params={{ stationId: s.id }}
                         className="group flex items-center justify-between border-b border-border py-3 transition hover:opacity-60"
                       >
-                        <span className="font-medium">{s.name}</span>
+                        <div>
+                          <span className="font-medium">
+                            {s.name}
+                          </span>
+                        </div>
                         <div className="flex items-center gap-3">
-                          <span className="text-xs text-success font-medium">{roomCount} ruangan</span>
+                          <span className="text-xs text-success font-medium">
+                            {roomCount} ruangan
+                          </span>
+
+                          <span className="text-xs text-muted-foreground">
+                            •
+                          </span>
+
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusClass}`}
+                            >
+                              {status}
+                            </span>
+
                           <ArrowRight className="h-3.5 w-3.5 text-success transition group-hover:translate-x-1" />
                         </div>
+                        {/* <ArrowRight className="h-3.5 w-3.5 text-success transition group-hover:translate-x-1" /> */}
                       </Link>
                     ) : (
-                      <div key={s.id} className="flex items-center justify-between border-b border-border py-3 opacity-40">
-                        <span className="text-muted-foreground">{s.name}</span>
-                        <span className="text-xs text-muted-foreground">Tidak tersedia</span>
+                      <div
+                        key={s.id}
+                        className="flex items-center justify-between border-b border-border py-3 opacity-40"
+                      >
+                        <span className="text-muted-foreground">
+                          {s.name}
+                        </span>
+
+                        <span className="text-xs text-muted-foreground">
+                          Tidak tersedia
+                        </span>
                       </div>
                     );
                   })}

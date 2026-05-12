@@ -1,12 +1,14 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, type FormEvent } from "react";
-import { ArrowLeft, CheckCircle2, MapPin, Users } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, MapPin, Users } from "lucide-react";
 import { z } from "zod";
 import { SiteHeader } from "@/components/site-header";
 import { BookingCalendar } from "@/components/booking-calendar";
 import { getRooms, getStations, addBooking, addLog, getBookings } from "@/lib/db";
 import { ROOM_TYPE_LABEL, type Room, type Station } from "@/lib/dummy-data";
 import { sendBookingConfirmation, sendBookingNotifToStation, getStationEmail } from "@/lib/email";
+import jsPDF from "jspdf";
+import html2canvas from 'html2canvas-pro';
 
 const EQUIPMENT_LIST = [
   "Proyektor",
@@ -63,6 +65,7 @@ function BookRoomPage() {
   const [originType, setOriginType] = useState<"mrt" | "mitra">("mrt");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submittedId, setSubmittedId] = useState<number | null>(null);
+  const [submittedBooking, setSubmittedBooking] = useState<any | null>(null);  
   const [submitting, setSubmitting] = useState(false);
   const [bookings, setBookings] = useState<import("@/lib/dummy-data").Booking[]>([]);
   const [startTime, setStartTime] = useState<string>("");
@@ -159,6 +162,16 @@ function BookRoomPage() {
         visitorType: d.visitorType,
       });
       setSubmittedId(created.id);
+      setSubmittedBooking({
+        bookingId: created.id,
+        requesterName: d.requesterName,
+        email: d.email,
+        stationName: station.name,
+        roomName: room.name,
+        date: d.date,
+        startTime: d.startTime,
+        endTime: d.endTime,
+      });       
       setBookings((prev) => [...prev, created]);
       await addLog(
         "SUBMIT_BOOKING",
@@ -201,23 +214,198 @@ function BookRoomPage() {
   };
 
   if (submittedId !== null) {
+
+    const receiptData = submittedBooking;
+
+    if (!receiptData) return null;
+
+    const downloadReceipt = async () => {
+      try {
+        const element = document.getElementById("booking-receipt");
+
+        if (!element) return;
+
+        const originalStyle = element.getAttribute("style");
+
+        element.setAttribute(
+          "style",
+          `
+            background: white;
+            color: black;
+            border: 1px solid #d4d4d8;
+          `
+        );
+
+        const canvas = await html2canvas(element, {
+          scale: 2,
+          backgroundColor: "#ffffff",
+          useCORS: true,
+        });
+
+        if (originalStyle) {
+          element.setAttribute("style", originalStyle);
+        } else {
+          element.removeAttribute("style");
+        }
+
+        const imgData = canvas.toDataURL("image/png");
+
+        const pdf = new jsPDF({
+          orientation: "portrait",
+          unit: "px",
+          format: "a4",
+        });
+
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+
+        const imgProps = pdf.getImageProperties(imgData);
+
+        const pdfHeight =
+          (imgProps.height * pdfWidth) / imgProps.width;
+
+        pdf.addImage(
+          imgData,
+          "PNG",
+          0,
+          0,
+          pdfWidth,
+          pdfHeight
+        );
+
+        pdf.save(`booking-${submittedId}.pdf`);
+      } catch (err) {
+        console.error("PDF download failed:", err);
+      }
+    };
+
     return (
-      <div className="min-h-screen">
+      <div className="min-h-screen bg-muted/30">
         <SiteHeader />
-        <div className="mx-auto max-w-lg px-4 py-16 text-center sm:px-6">
-          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-primary/15 text-primary">
-            <CheckCircle2 className="h-8 w-8" />
+
+        <div className="mx-auto max-w-2xl px-4 py-10">
+          <div className="mb-6 text-center">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-primary/15 text-primary">
+              <CheckCircle2 className="h-8 w-8" />
+            </div>
+
+            <h1 className="text-2xl font-bold">
+              Booking berhasil dikirim
+            </h1>
+
+            <p className="mt-2 text-sm text-muted-foreground">
+              Simpan bukti booking Anda dengan mengunduh receipt di bawah.
+            </p>
           </div>
-          <h1 className="text-2xl font-bold">Booking diajukan!</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Booking <strong className="text-foreground">#{submittedId}</strong> telah dikirim ke admin untuk dikonfirmasi.
-          </p>
-          <div className="mt-6 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
-            <button onClick={() => navigate({ to: "/" })} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-110">
-              Kembali ke beranda
+
+          {/* Receipt */}
+          <div
+            id="booking-receipt"
+            className="rounded-2xl border border-border bg-white p-8 shadow-sm"
+          >
+            <div className="border-b border-border pb-5">
+              <h2 className="text-2xl font-bold text-[#003B71]">
+                Booking Ruang Stasiun MRT Jakarta
+              </h2>
+
+              <p className="mt-2 text-sm text-muted-foreground">
+                Receipt / Bukti Pengajuan Booking
+              </p>
+            </div>
+
+            <div className="mt-6 rounded-xl border border-green-200 bg-green-50 p-5">
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">
+                    ID Booking
+                  </span>
+
+                  <span className="font-semibold">
+                    #{receiptData.bookingId}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">
+                    Pemohon
+                  </span>
+
+                  <span className="font-medium">
+                    {receiptData.requesterName}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">
+                    Email
+                  </span>
+
+                  <span className="font-medium">
+                    {receiptData.email}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">
+                    Stasiun
+                  </span>
+
+                  <span className="font-medium">
+                    {receiptData.stationName}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">
+                    Ruangan
+                  </span>
+
+                  <span className="font-medium">
+                    {receiptData.roomName}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">
+                    Tanggal
+                  </span>
+
+                  <span className="font-medium">
+                    {receiptData.date}
+                  </span>
+                </div>
+
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">
+                    Waktu
+                  </span>
+
+                  <span className="font-medium">
+                    {receiptData.startTime} – {receiptData.endTime}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-6 text-xs text-muted-foreground">
+              Booking ini sudah otomatis terkonfirmasi. Harap hadir tepat waktu.
+            </p>
+          </div>
+
+          {/* Actions */}
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <button
+              onClick={downloadReceipt}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:brightness-110"
+            >
+              <Download className="h-4 w-4" />
+              Download Receipt
             </button>
-            <button onClick={() => { setSubmittedId(null); setDate(undefined); setEquipment({}); }} className="rounded-xl border border-border bg-card px-5 py-2.5 text-sm font-medium transition hover:border-primary/40">
-              Booking lagi
+
+            <button
+              onClick={() => navigate({ to: "/" })}
+              className="rounded-xl border border-border bg-card px-5 py-3 text-sm font-medium transition hover:border-primary/40"
+            >
+              Kembali ke beranda
             </button>
           </div>
         </div>

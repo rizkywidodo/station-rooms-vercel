@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as StationsRouteImport } from './routes/stations'
 import { Route as AdminLoginRouteImport } from './routes/admin-login'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as StationComparisonCardRouteImport } from './routes/StationComparisonCard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as StationStationIdRouteImport } from './routes/station.$stationId'
 import { Route as BookRoomIdRouteImport } from './routes/book.$roomId'
@@ -30,6 +31,11 @@ const AdminLoginRoute = AdminLoginRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StationComparisonCardRoute = StationComparisonCardRouteImport.update({
+  id: '/StationComparisonCard',
+  path: '/StationComparisonCard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -55,6 +61,7 @@ const AdminManageRoute = AdminManageRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/StationComparisonCard': typeof StationComparisonCardRoute
   '/admin': typeof AdminRouteWithChildren
   '/admin-login': typeof AdminLoginRoute
   '/stations': typeof StationsRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/StationComparisonCard': typeof StationComparisonCardRoute
   '/admin': typeof AdminRouteWithChildren
   '/admin-login': typeof AdminLoginRoute
   '/stations': typeof StationsRoute
@@ -74,6 +82,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/StationComparisonCard': typeof StationComparisonCardRoute
   '/admin': typeof AdminRouteWithChildren
   '/admin-login': typeof AdminLoginRoute
   '/stations': typeof StationsRoute
@@ -85,6 +94,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/StationComparisonCard'
     | '/admin'
     | '/admin-login'
     | '/stations'
@@ -94,6 +104,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/StationComparisonCard'
     | '/admin'
     | '/admin-login'
     | '/stations'
@@ -103,6 +114,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/StationComparisonCard'
     | '/admin'
     | '/admin-login'
     | '/stations'
@@ -113,6 +125,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  StationComparisonCardRoute: typeof StationComparisonCardRoute
   AdminRoute: typeof AdminRouteWithChildren
   AdminLoginRoute: typeof AdminLoginRoute
   StationsRoute: typeof StationsRoute
@@ -141,6 +154,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/StationComparisonCard': {
+      id: '/StationComparisonCard'
+      path: '/StationComparisonCard'
+      fullPath: '/StationComparisonCard'
+      preLoaderRoute: typeof StationComparisonCardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -186,6 +206,7 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  StationComparisonCardRoute: StationComparisonCardRoute,
   AdminRoute: AdminRouteWithChildren,
   AdminLoginRoute: AdminLoginRoute,
   StationsRoute: StationsRoute,
