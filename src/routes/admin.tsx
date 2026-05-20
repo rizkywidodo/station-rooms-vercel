@@ -1111,7 +1111,31 @@ function AdminBookingRow({ booking, roomName, stationName, onDecide, onDelete, o
           />
           <div className="mt-2 flex gap-2">
             <button
-              onClick={() => { onDecide(booking, "rejected", cancelReason); setShowCancelDialog(false); setCancelReason(""); }}
+              onClick={async () => {
+                await onDecide(booking, "rejected", cancelReason);
+
+                if (booking.phone) {
+                  const phone = booking.phone.replace(/^0/, "62");
+
+                  const message =
+                    `Halo ${booking.requesterName},\n\n` +
+                    `Booking ruangan Anda telah dibatalkan.\n\n` +
+                    `Stasiun: ${stationName}\n` +
+                    `Ruangan: ${roomName}\n` +
+                    `Tanggal: ${booking.date}\n` +
+                    `Waktu: ${booking.startTime} - ${booking.endTime}\n\n` +
+                    `Alasan:\n${cancelReason}\n\n` +
+                    `Mohon maaf atas ketidaknyamanannya.`;
+
+                  const waUrl =
+                    `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+
+                  window.open(waUrl, "_blank");
+                }
+
+                setShowCancelDialog(false);
+                setCancelReason("");
+              }}              
               className="inline-flex items-center gap-1.5 rounded-xl bg-destructive px-4 py-2 text-xs font-semibold text-white hover:brightness-110 cursor-pointer"
             >
               <X className="h-3.5 w-3.5" /> Konfirmasi Cancel

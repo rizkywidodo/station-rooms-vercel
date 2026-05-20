@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
-import { ArrowRight, Search, Plus } from "lucide-react";
+import { ArrowRight, Search, Plus, Users, ChevronDown } from "lucide-react";
 import { SiteHeader } from "@/components/site-header";
 import { BookingCard } from "@/components/booking-card";
 import { supabase } from "@/lib/supabase";
@@ -36,6 +36,7 @@ function IndexPage() {
   const [selectedDate, setSelectedDate] = useState<string | undefined>();
   const [regionFilter, setRegionFilter] = useState<string>("all");
   const [stationFilter, setStationFilter] = useState<string>("all");
+  const [openStation, setOpenStation] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "date">("newest");
@@ -196,32 +197,32 @@ useEffect(() => { setPage(1); }, [search, statusFilter, selectedDate, regionFilt
                   {sts.map((s) => {
                     const hasRooms = stationHasRooms(s.id);
 
-                    const rooms = getRoomsByStation(s.id);
+                    const stationRooms = getRoomsByStation(s.id);
 
-                    const roomCount = rooms.length;
+                    const roomCount = stationRooms.length;
 
                     const today = new Date().toISOString().slice(0, 10);
 
                     const todayBookings = bookings.filter(
                       (b) =>
-                        rooms.some((r) => r.id === b.roomId) &&
+                        stationRooms.some((r) => r.id === b.roomId) &&
                         b.date === today &&
                         b.status !== "rejected"
                     );
 
-                    let status = "Available Today";
+                    let status = "Tersedia";
 
                     let statusClass =
                       "bg-green-100 text-green-700 border-green-200";
 
                     if (todayBookings.length > 0) {
-                      status = "Partially Booked";
+                      status = "Dipesan Sebagian";
 
                       statusClass =
                         "bg-yellow-100 text-yellow-700 border-yellow-200";
                     }
 
-                    const fullyBookedRooms = rooms.filter((room) => {
+                    const fullyBookedRooms = stationRooms.filter((room) => {
                       const roomBookings = todayBookings.filter(
                         (b) => b.roomId === room.id
                       );
@@ -258,19 +259,26 @@ useEffect(() => { setPage(1); }, [search, statusFilter, selectedDate, regionFilt
                       roomCount > 0 &&
                       fullyBookedRooms.length === roomCount
                     ) {
-                      status = "Full Today";
+                      status = "Sudah Penuh";
 
                       statusClass =
                         "bg-red-100 text-red-700 border-red-200";
                     }
 
                     return hasRooms ? (
-                      <Link
+                      <div
                         key={s.id}
-                        to="/station/$stationId"
-                        params={{ stationId: s.id }}
-                        className="group flex items-center justify-between border-b border-border py-3 transition hover:opacity-60"
+                        className="border-b border-border"
                       >
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOpenStation(
+                              openStation === s.id ? null : s.id
+                            )
+                          }
+                          className="group flex w-full items-center justify-between py-3 transition hover:opacity-60"
+                        >
                         <div>
                           <span className="font-medium">
                             {s.name}
@@ -291,10 +299,99 @@ useEffect(() => { setPage(1); }, [search, statusFilter, selectedDate, regionFilt
                               {status}
                             </span>
 
-                          <ArrowRight className="h-3.5 w-3.5 text-success transition group-hover:translate-x-1" />
+                          <ChevronDown className="h-3.5 w-3.5 text-success transition group-hover:translate-x-1" />
                         </div>
                         {/* <ArrowRight className="h-3.5 w-3.5 text-success transition group-hover:translate-x-1" /> */}
-                      </Link>
+                        </button>
+
+                        {openStation === s.id && (
+                          <div className="pb-3 space-y-2 animate-in fade-in duration-200">
+                            {stationRooms.map((room) => {
+                            const OPEN_HOUR = 8;
+                            const CLOSE_HOUR = 19;
+
+                            const now = new Date();
+                            const currentHour = now.getHours();
+
+                            const isToday = today === now.toISOString().slice(0, 10);
+
+                            const roomBookings = bookings.filter(
+                              (b) =>
+                                b.roomId === room.id &&
+                                b.date === today &&
+                                b.status !== "rejected"
+                            );
+
+                            const bookedHours = new Set<number>();
+
+                            roomBookings.forEach((b) => {
+                              const start = parseInt(b.startTime.slice(0, 2));
+                              const end = parseInt(b.endTime.slice(0, 2));
+
+                              for (let h = start; h < end; h++) {
+                                bookedHours.add(h);
+                              }
+                            });
+
+                            let availableHours = 0;
+
+                            for (let h = OPEN_HOUR; h < CLOSE_HOUR; h++) {
+                              const isPastHour = isToday && h <= currentHour;
+
+                              if (!isPastHour && !bookedHours.has(h)) {
+                                availableHours++;
+                              }
+                            }
+
+                            let roomStatus = "Tersedia";
+
+                            let roomStatusClass =
+                              "bg-green-100 text-green-700 border-green-200";
+
+                            if (availableHours === 0) {
+                              roomStatus = "Sudah Penuh";
+
+                              roomStatusClass =
+                                "bg-red-100 text-red-700 border-red-200";
+                            } else if (bookedHours.size > 0) {
+                              roomStatus = "Dipesan Sebagian";
+
+                              roomStatusClass =
+                                "bg-yellow-100 text-yellow-700 border-yellow-200";
+                            }                      
+                              return (
+                                <Link
+                                  key={room.id}
+                                  to="/book/$roomId"
+                                  params={{ roomId: room.id }}
+                                  className="flex items-center justify-between rounded-xl border border-border bg-muted/30 px-4 py-3 transition hover:bg-muted/60"
+                                >
+                                  <div>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <div className="font-semibold">{room.name}</div>
+
+                                      <span
+                                        className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${roomStatusClass}`}
+                                      >
+                                        {roomStatus}
+                                      </span>
+                                    </div>
+                                    <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground">
+                                      <span className="text-accent">{ROOM_TYPE_LABEL[room.type]}</span>
+                                      <span className="inline-flex items-center gap-1">
+                                        <Users className="h-3 w-3" /> {room.capacity} orang
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <ArrowRight className="h-4 w-4 text-primary" />
+                                </Link>
+                              );
+
+                            })}
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <div
                         key={s.id}
