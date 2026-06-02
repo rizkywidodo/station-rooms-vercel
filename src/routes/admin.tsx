@@ -17,7 +17,7 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-type Tab = "bookings" | "rooms" | "stations" | "logs";
+type Tab = "bookings" | "rooms" | "stations" | "logs" | "users";
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -298,6 +298,10 @@ function AdminPage() {
     { id: "rooms", label: "Ruangan" },
     { id: "stations", label: "Stasiun" },
     { id: "logs", label: "Log Aktivitas" },
+
+    ...(!allowedStationIds
+      ? [{ id: "users" as Tab, label: "Users" }]
+      : []),
   ];
 
   return (
@@ -410,8 +414,14 @@ function AdminPage() {
           <RoomsTab stations={visibleStations} rooms={rooms} onRefresh={fetchAll} adminEmail={profile?.name ?? adminEmail} />
         ) : tab === "stations" ? (
           <StationsTab stations={visibleStations} rooms={rooms} onRefresh={fetchAll} adminEmail={profile?.name ?? adminEmail} />
+        ) : tab === "logs" ? (
+          <LogsTab
+            allowedStationIds={allowedStationIds}
+            stationMap={stationMap}
+            roomMap={roomMap}
+          />
         ) : (
-          <LogsTab allowedStationIds={allowedStationIds} stationMap={stationMap} roomMap={roomMap} />
+          <UsersTab stations={stations} />
         )}
       </section>
     </div>
@@ -990,6 +1000,450 @@ function LogsTab({ allowedStationIds, stationMap, roomMap }: { allowedStationIds
     )}
   </div>
 );
+}
+
+function UsersTab({ stations }: { stations: Station[] }) {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [regionFilter, setRegionFilter] = useState("all");
+  const [stationFilter, setStationFilter] = useState("all");
+
+  const [page, setPage] = useState(1);
+
+  const PER_PAGE = 10;
+
+  const handleUpdateUser = async (
+    userId: string,
+    payload: any
+  ) => {
+    const { error } = await supabase
+      .from("user_profiles")
+      .update(payload)
+      .eq("id", userId);
+
+    if (error) {
+      console.error(error);
+      alert(error.message);
+      return false;
+    }
+
+    await fetchUsers();
+
+    return true;
+  };  
+
+  const fetchUsers = async () => {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("*")
+      .order("name");
+
+    if (error) {
+      console.error(error);
+      alert("Gagal mengambil user");
+    } else {
+      setUsers(data ?? []);
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, roleFilter, regionFilter, stationFilter]);
+
+  const filtered = useMemo(() => {
+    return users
+      .filter((u) => {
+        if (roleFilter === "all") return true;
+        return u.role === roleFilter;
+      })
+      .filter((u) => {
+        if (regionFilter === "all") return true;
+        return String(u.region) === regionFilter;
+      })
+      .filter((u) => {
+        if (stationFilter === "all") return true;
+        return u.station_id === stationFilter;
+      })
+      .filter((u) => {
+        if (!search.trim()) return true;
+
+        const q = search.toLowerCase();
+
+        return (
+          u.name?.toLowerCase().includes(q) ||
+          u.email?.toLowerCase().includes(q)
+        );
+      });
+  }, [users, search, roleFilter, regionFilter, stationFilter]);
+
+  const totalPages = Math.ceil(filtered.length / PER_PAGE);
+
+  const paginated = filtered.slice(
+    (page - 1) * PER_PAGE,
+    page * PER_PAGE
+  );
+
+  const filteredStations = useMemo(() => {
+    if (regionFilter === "all") return stations;
+
+    return stations.filter(
+      (s) => String(s.region) === regionFilter
+    );
+  }, [stations, regionFilter]);
+
+  if (loading) {
+    return (
+      <div className="py-10 text-center text-sm text-muted-foreground">
+        Memuat users...
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Filters */}
+      <div className="mb-5 flex flex-wrap gap-2">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Cari nama..."
+          className="w-56 rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        />
+
+        <select
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+          className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        >
+          <option value="all">Semua Role</option>
+          <option value="planner">Planner</option>
+          <option value="area_authority">Area Authority</option>
+          <option value="mitski">Super Admin</option>
+        </select>
+
+        <select
+          value={regionFilter}
+          onChange={(e) => {
+            setRegionFilter(e.target.value);
+            setStationFilter("all");
+          }}
+          className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        >
+          <option value="all">Semua Region</option>
+          <option value="1">Region 1</option>
+          <option value="2">Region 2</option>
+          <option value="3">Region 3</option>
+        </select>
+
+        <select
+          value={stationFilter}
+          onChange={(e) => setStationFilter(e.target.value)}
+          className="rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+        >
+          <option value="all">Semua Stasiun</option>
+
+          {filteredStations.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden">
+        <div className="grid grid-cols-5 border-b border-border bg-muted/40 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div>Nama</div>
+          <div>Email</div>
+          <div>Role</div>
+          <div>Region / Station</div>
+          <div>Aksi</div>
+        </div>
+
+        {paginated.length === 0 ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            Tidak ada user
+          </div>
+        ) : (
+          paginated.map((u) => (
+            <UserRow
+              key={u.id}
+              user={u}
+              stations={stations}
+              onSave={handleUpdateUser}
+            />
+          ))
+        )}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="mt-6 flex items-center justify-center gap-1 flex-wrap">
+          <button
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1}
+            className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40"
+          >
+            ←
+          </button>
+
+          {Array.from(
+            { length: Math.min(totalPages, 7) },
+            (_, i) => {
+              const p = i + 1;
+
+              return (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={cn(
+                    "rounded-xl border px-3 py-2 text-sm transition",
+                    page === p
+                      ? "border-primary bg-primary text-white"
+                      : "border-border text-muted-foreground hover:border-primary/40 hover:text-primary"
+                  )}
+                >
+                  {p}
+                </button>
+              );
+            }
+          )}
+
+          <button
+            onClick={() =>
+              setPage((p) => Math.min(totalPages, p + 1))
+            }
+            disabled={page === totalPages}
+            className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary disabled:opacity-40"
+          >
+            →
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UserRow({
+  user,
+  stations,
+  onSave,
+}: {
+  user: any;
+  stations: Station[];
+  onSave: (
+    userId: string,
+    payload: any
+  ) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  const [editName, setEditName] = useState(user.name ?? "");
+  const [editRole, setEditRole] = useState(user.role ?? "planner");
+  const [editRegion, setEditRegion] = useState(
+    user.region ? String(user.region) : "1"
+  );
+  const [editStation, setEditStation] = useState(
+    user.station_id ?? ""
+  );
+
+  const handleSave = async () => {
+    const payload: any = {
+      name: editName,
+      role: editRole,
+    };
+
+    if (editRole === "planner") {
+      payload.region = Number(editRegion);
+      payload.station_id = null;
+    } else {
+      payload.station_id = editStation;
+      payload.region = null;
+    }
+
+    console.log("UPDATING", payload);
+
+    const success = await onSave(user.id, payload);
+
+    if (!success) return;
+
+    alert("User berhasil diupdate");
+
+    setEditing(false);
+  };
+
+  return (
+    <>
+      {/* Main Row */}
+      <div className="grid grid-cols-5 items-center border-b border-border px-4 py-3 text-sm">
+        <div className="font-medium">{user.name}</div>
+
+        <div className="text-muted-foreground">
+          {user.email ?? "-"}
+        </div>
+
+        <div>
+          <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">
+            {user.role}
+          </span>
+        </div>
+
+        <div className="text-muted-foreground">
+          {user.role === "planner"
+            ? `Region ${user.region}`
+            : stations.find((s) => s.id === user.station_id)
+                ?.name ?? "-"}
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => setEditing((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary"
+          >
+            <Pencil className="h-3 w-3" />
+            {editing ? "Tutup" : "Edit"}
+          </button>
+
+          <button className="inline-flex items-center gap-1 rounded-lg border border-border px-2.5 py-1.5 text-xs text-muted-foreground hover:border-destructive/40 hover:text-destructive">
+            <Trash2 className="h-3 w-3" />
+            Hapus
+          </button>
+        </div>
+      </div>
+
+      {/* Accordion Edit */}
+      {editing && (
+        <div className="border-b border-border bg-muted/20 px-4 py-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Name */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Nama
+              </label>
+
+              <input
+                value={editName}
+                onChange={(e) =>
+                  setEditName(e.target.value)
+                }
+                className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              />
+            </div>
+
+            {/* Role */}
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Role
+              </label>
+
+              <select
+                value={editRole}
+                onChange={(e) =>
+                  setEditRole(e.target.value)
+                }
+                className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+              >
+                <option value="planner">
+                  Planner
+                </option>
+
+                <option value="area_authority">
+                  Area Authority
+                </option>
+              </select>
+            </div>
+
+            {/* Region */}
+            {editRole === "planner" && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Region
+                </label>
+
+                <select
+                  value={editRegion}
+                  onChange={(e) =>
+                    setEditRegion(e.target.value)
+                  }
+                  className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                >
+                  <option value="1">
+                    Region 1
+                  </option>
+
+                  <option value="2">
+                    Region 2
+                  </option>
+
+                  <option value="3">
+                    Region 3
+                  </option>
+                </select>
+              </div>
+            )}
+
+            {/* Station */}
+            {editRole === "area_authority" && (
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Station
+                </label>
+
+                <select
+                  value={editStation}
+                  onChange={(e) =>
+                    setEditStation(e.target.value)
+                  }
+                  className="w-full rounded-xl border border-border bg-white px-3 py-2 text-sm focus:border-primary focus:outline-none"
+                >
+                  <option value="">
+                    Pilih Stasiun
+                  </option>
+
+                  {stations.map((s) => (
+                    <option
+                      key={s.id}
+                      value={s.id}
+                    >
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Action */}
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              onClick={() => setEditing(false)}
+              className="rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:border-primary/40 hover:text-primary"
+            >
+              Batal
+            </button>
+
+            <button
+              onClick={handleSave}
+              className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white hover:opacity-90"
+            >
+              Simpan
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 // ── Shared Components ──────────────────────────────────────────────

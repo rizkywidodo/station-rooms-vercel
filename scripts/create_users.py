@@ -142,6 +142,7 @@ def create_user(user):
         profile = {
             "id": uid,
             "name": user["name"],
+            "email": user["email"],
             "role": user["role"],
         }
         if user["role"] == "planner":
