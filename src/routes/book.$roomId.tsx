@@ -129,7 +129,9 @@ function BookRoomPage() {
       date: date ?? "",
       startTime: fd.get("startTime"),
       endTime: fd.get("endTime"),
-      phone: fd.get("phone"),
+      phone: `62${String(fd.get("phone") ?? "")
+        .replace(/\D/g, "")
+        .replace(/^0/, "")}`,
       visitorType,
     };
     const parsed = bookingSchema.safeParse(raw);
@@ -460,8 +462,19 @@ function BookRoomPage() {
               <input name="email" type="email" placeholder="nama@mrtjakarta.co.id" className={inputCls} maxLength={120} />
             </Field>
             <Field label="Nomor telepon" error={errors.phone}>
-              <input name="phone" type="tel" placeholder="Cth. 08123456789" className={inputCls} maxLength={20} />
-            </Field>
+              <div className="flex overflow-hidden rounded-xl border border-border bg-muted/60">
+                <div className="flex items-center border-r border-border px-3 text-sm text-muted-foreground">
+                  +62
+                </div>
+
+                <input
+                  name="phone"
+                  type="tel"
+                  placeholder="8123456789"
+                  className="w-full bg-transparent px-3 py-2.5 text-sm focus:outline-none"
+                />
+              </div>
+            </Field>            
             <Field label="Tipe pengunjung" error={errors.visitorType}>
               <div className="flex gap-2">
                 <ToggleBtn active={visitorType === "internal"} onClick={() => setVisitorType("internal")}>Internal</ToggleBtn>
