@@ -57,6 +57,25 @@ export const Route = createFileRoute("/book/$roomId")({
   component: BookRoomPage,
 });
 
+function generateTimeSlots() {
+  const slots: string[] = [];
+
+  for (let hour = 0; hour < 24; hour++) {
+    slots.push(`${String(hour).padStart(2, "0")}:00`);
+    slots.push(`${String(hour).padStart(2, "0")}:30`);
+  }
+
+  return slots;
+}
+
+const TIME_SLOTS = generateTimeSlots();
+
+function timeToMinutes(time: string) {
+  const [hours, minutes] = time.split(":").map(Number);
+
+  return hours * 60 + minutes;
+}
+
 function BookRoomPage() {
   const data = Route.useLoaderData() as { room: Room; station: Station };
   const { room, station } = data;
@@ -78,28 +97,56 @@ function BookRoomPage() {
     if (!date) return [];
     return bookings
       .filter((b) => b.roomId === room.id && b.date === date && b.status === "confirmed")
-      .map((b) => ({ start: parseInt(b.startTime), end: parseInt(b.endTime) }));
+      .map((b) => ({ start: b.startTime, end: b.endTime }));
   }, [bookings, date, room.id]);
 
-  const isHourBlocked = (hour: number) =>
-    bookedSlots.some((slot) => hour >= slot.start && hour < slot.end);
+  const isTimeBlocked = (time: string) => {
+    const current = timeToMinutes(time);
+
+    return bookedSlots.some((slot) => {
+      const start = timeToMinutes(slot.start);
+      const end = timeToMinutes(slot.end);
+
+      return current >= start && current < end;
+    });
+  };
+
+  const canStartBooking = (time: string) => {
+    const startMinutes = timeToMinutes(time);
+
+    // Find next booking after selected start
+    const nextBooking = bookedSlots
+      .map((slot) => ({
+        start: timeToMinutes(slot.start),
+      }))
+      .filter((slot) => slot.start > startMinutes)
+      .sort((a, b) => a.start - b.start)[0];
+
+    // If no booking afterwards, allow
+    if (!nextBooking) {
+      return startMinutes < 23 * 60 + 30;
+    }
+
+    // Must have at least one 30-minute slot available
+    return nextBooking.start - startMinutes >= 30;
+  };  
 
   const now = new Date();
   const todayIso = now.toISOString().slice(0, 10);
   const currentHour = now.getHours();
 
-  const availableStartHours = Array.from({ length: 11 }, (_, i) => i + 8).filter((h) => {
-    if (date === todayIso && h <= currentHour) return false;
-    return !isHourBlocked(h);
-  });
+  // const availableStartHours = Array.from({ length: 11 }, (_, i) => i + 8).filter((h) => {
+  //   if (date === todayIso && h <= currentHour) return false;
+  //   return !isHourBlocked(h);
+  // });
 
-  const availableEndHours = Array.from({ length: 11 }, (_, i) => i + 9).filter((h) => {
-    if (date === todayIso && h <= currentHour) return false;
-    if (!startTime) return true;
-    const selectedStart = parseInt(startTime);
-    if (h <= selectedStart) return false;
-    return bookedSlots.every((slot) => slot.start >= h || slot.end <= selectedStart);
-  });
+  // const availableEndHours = Array.from({ length: 11 }, (_, i) => i + 9).filter((h) => {
+  //   if (date === todayIso && h <= currentHour) return false;
+  //   if (!startTime) return true;
+  //   const selectedStart = parseInt(startTime);
+  //   if (h <= selectedStart) return false;
+  //   return bookedSlots.every((slot) => slot.start >= h || slot.end <= selectedStart);
+  // });
 
   const toggleEquipment = (item: string) => {
     setEquipment((prev) => {
@@ -143,8 +190,14 @@ function BookRoomPage() {
     }
     setErrors({});
     const d = parsed.data;
-    if (d.startTime >= d.endTime) {
-      setErrors({ endTime: "Jam selesai harus setelah jam mulai" });
+    if (
+      timeToMinutes(d.startTime) >=
+      timeToMinutes(d.endTime)
+    ) {
+      setErrors({
+        endTime: "Jam selesai harus setelah jam mulai",
+      });
+
       return;
     }
     const equipmentList = Object.entries(equipment).map(([item, qty]) => ({ item, qty }));
@@ -499,12 +552,19 @@ function BookRoomPage() {
             <Field label="Jam mulai" error={errors.startTime}>
               <select name="startTime" className={inputCls} value={startTime} onChange={(e) => setStartTime(e.target.value)}>
                 <option value="" disabled>Pilih jam mulai</option>
-                {Array.from({ length: 11 }, (_, i) => i + 8).map((h) => {
-                  const timeStr = `${String(h).padStart(2, "0")}:00`;
-                  const blocked = isHourBlocked(h) || (date === todayIso && h <= currentHour);
+                {TIME_SLOTS.map((time) => {
+                  const blocked =
+                    isTimeBlocked(time) ||
+                    !canStartBooking(time);                  
+
                   return (
-                    <option key={h} value={timeStr} disabled={blocked} style={blocked ? { color: "#ef4444", backgroundColor: "#fef2f2" } : {}}>
-                      {timeStr}{blocked ? " — Reserved" : ""}
+                    <option
+                      key={time}
+                      value={time}
+                      disabled={blocked}
+                    >
+                      {time}
+                      {blocked ? " — Reserved" : ""}
                     </option>
                   );
                 })}
@@ -513,15 +573,29 @@ function BookRoomPage() {
             <Field label="Jam selesai" error={errors.endTime}>
               <select name="endTime" className={inputCls} defaultValue="">
                 <option value="" disabled>Pilih jam selesai</option>
-                {Array.from({ length: 11 }, (_, i) => i + 9).map((h) => {
-                  const timeStr = `${String(h).padStart(2, "0")}:00`;
-                  const selectedStart = parseInt(startTime ?? "0");
-                  const blocked = (date === todayIso && h <= currentHour) ||
-                    h <= selectedStart ||
-                    bookedSlots.some((slot) => slot.start >= selectedStart && slot.start < h);
+                {TIME_SLOTS.map((time) => {
+                  const selectedStart = timeToMinutes(startTime);
+                  const current = timeToMinutes(time);
+
+                  const blocked =
+                    !startTime ||
+                    current <= selectedStart ||
+                    bookedSlots.some((slot) => {
+                      const bookingStart = timeToMinutes(slot.start);
+
+                      return (
+                        bookingStart > selectedStart &&
+                        bookingStart < current
+                      );
+                    });
+
                   return (
-                    <option key={h} value={timeStr} disabled={blocked} style={blocked ? { color: "#ef4444", backgroundColor: "#fef2f2" } : {}}>
-                      {timeStr}{isHourBlocked(h) ? " — Reserved" : ""}
+                    <option
+                      key={time}
+                      value={time}
+                      disabled={blocked}
+                    >
+                      {time}
                     </option>
                   );
                 })}
