@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import { WeeklyTrendCard } from "./WeeklyTrendCard";
 import { StationComparisonCard } from "./StationComparisonCard";
 import { PeakHoursCard } from "./PeakHoursCard";
+import { exportMonthlyBookings } from "@/lib/exportBookings";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({ meta: [{ title: "Admin Dashboard · MRT Jakarta Booking" }] }),
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/admin")({
   component: AdminPage,
 });
 
-type Tab = "bookings" | "rooms" | "stations" | "logs" | "users";
+type Tab = "bookings" | "rooms" | "stations" | "logs" | "users" | "export";
 
 function AdminPage() {
   const navigate = useNavigate();
@@ -36,10 +37,17 @@ function AdminPage() {
   const [adminEmail, setAdminEmail] = useState("");
   const [profile, setProfile] = useState<{ id: string; name: string; role: string; region?: number; station_id?: string } | null>(null);
   const handleAttended = async (id: number) => {
-  await markAttended(id);
-  await addLog("ATTENDED", adminEmail, `Booking #${id} dikonfirmasi hadir`);
-  await fetchAll();
-};
+    await markAttended(id);
+    await addLog("ATTENDED", adminEmail, `Booking #${id} dikonfirmasi hadir`);
+    await fetchAll();
+  };
+  const [exportMonth, setExportMonth] = useState(
+    new Date().getMonth() + 1
+  );
+
+  const [exportYear, setExportYear] = useState(
+    new Date().getFullYear()
+  );    
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data }) => {
@@ -298,10 +306,11 @@ function AdminPage() {
     { id: "rooms", label: "Ruangan" },
     { id: "stations", label: "Stasiun" },
     { id: "logs", label: "Log Aktivitas" },
-
+    { id: "export", label: "Export" },
     ...(!allowedStationIds
       ? [{ id: "users" as Tab, label: "Users" }]
       : []),
+      
   ];
 
   return (
@@ -373,7 +382,7 @@ function AdminPage() {
 
           <StatusDistributionCard data={statusData} /> */}
 
-        </div>        
+        </div>               
         <div className="flex gap-1 border-b border-border mb-6">
           {tabs.map((t) => (
             <button
@@ -420,6 +429,8 @@ function AdminPage() {
             stationMap={stationMap}
             roomMap={roomMap}
           />
+        ) : tab === "export" ? (
+          <ExportTab bookings={filtered} />
         ) : (
           <UsersTab stations={stations} />
         )}
@@ -1641,6 +1652,88 @@ function BookingSection({ title, data, roomMap, stationMap }: any) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function ExportTab({
+  bookings,
+}: {
+  bookings: Booking[];
+}) {
+  const [exportMonth, setExportMonth] = useState(
+    new Date().getMonth() + 1
+  );
+
+  const [exportYear, setExportYear] = useState(
+    new Date().getFullYear()
+  );
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold">
+          Export Laporan Booking
+        </h2>
+
+        <p className="text-sm text-muted-foreground">
+          Unduh data booking berdasarkan bulan dan tahun.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-card p-5">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium">
+              Bulan
+            </label>
+
+            <select
+              value={exportMonth}
+              onChange={(e) =>
+                setExportMonth(Number(e.target.value))
+              }
+              className="rounded-xl border border-border bg-muted/60 px-3 py-2.5 text-sm"
+            >
+              {Array.from({ length: 12 }, (_, i) => (
+                <option key={i + 1} value={i + 1}>
+                  {new Date(0, i).toLocaleString("id-ID", {
+                    month: "long",
+                  })}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium">
+              Tahun
+            </label>
+
+            <input
+              type="number"
+              value={exportYear}
+              onChange={(e) =>
+                setExportYear(Number(e.target.value))
+              }
+              className="rounded-xl border border-border bg-muted/60 px-3 py-2.5 text-sm"
+            />
+          </div>
+
+          <button
+            onClick={() =>
+              exportMonthlyBookings(
+                bookings,
+                exportMonth,
+                exportYear
+              )
+            }
+            className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-white hover:brightness-110"
+          >
+            Export Excel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
